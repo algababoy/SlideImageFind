@@ -5,6 +5,7 @@ import { SearchBar } from "@/components/search-bar";
 import { SearchFilters } from "@/components/search-filters";
 import { ImageGrid } from "@/components/image-grid";
 import { ImageModal } from "@/components/image-modal";
+import { CommercialUseInfo } from "@/components/commercial-use-info";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Grid3X3, List } from "lucide-react";
@@ -112,6 +113,7 @@ export default function Home() {
             >
               Clear All Filters
             </Button>
+            <CommercialUseInfo />
           </div>
 
           <div className="flex-1">

@@ -71,12 +71,19 @@ export function ImageModal({ image, isOpen, onClose, onToggleFavorite, isFavorit
         <div className="flex">
           {/* Image Preview */}
           <div className="flex-1 p-6">
-            <img 
-              src={image.imageUrl}
-              alt={image.title}
-              className="w-full h-auto rounded-lg max-h-96 object-contain"
-              data-testid="modal-image"
-            />
+            <a 
+              href={image.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="modal-image-link"
+            >
+              <img 
+                src={image.imageUrl}
+                alt={image.title}
+                className="w-full h-auto rounded-lg max-h-96 object-contain hover:opacity-90 transition-opacity cursor-pointer"
+                data-testid="modal-image"
+              />
+            </a>
           </div>
           
           {/* Image Details */}
@@ -101,9 +108,15 @@ export function ImageModal({ image, isOpen, onClose, onToggleFavorite, isFavorit
               <div>
                 <label className="text-sm font-medium text-foreground">License</label>
                 <div className="flex items-center space-x-2 mt-1">
-                  <Badge className="text-xs font-medium bg-accent text-accent-foreground">
-                    {image.license}
-                  </Badge>
+                  <a 
+                    href={image.licenseUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Badge className="text-xs font-medium bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer">
+                      {image.license}
+                    </Badge>
+                  </a>
                   <Badge 
                     variant={isCommercial ? "default" : "destructive"}
                     className="text-xs"
@@ -140,7 +153,9 @@ export function ImageModal({ image, isOpen, onClose, onToggleFavorite, isFavorit
                   className="text-primary hover:underline text-sm block"
                   data-testid="modal-source-link"
                 >
-                  Wikimedia Commons
+                  {image.source.charAt(0).toUpperCase() + image.source.slice(1)}
+                  {image.source === 'wikimedia' && ' Commons'}
+                  {image.source === 'openclipart' && 'art'}
                 </a>
               </div>
               

@@ -20,7 +20,26 @@ export function ImageCard({ image, onImageClick, onToggleFavorite, isFavorite }:
     image.license.toLowerCase().includes(opt.value)
   );
   
-  const isCommercial = licenseOption?.commercial ?? false;
+  // Handle commercial use for all sources
+  const isCommercial = licenseOption?.commercial ?? getCommercialUseStatus(image.source, image.license);
+
+  function getCommercialUseStatus(source: string, license: string): boolean {
+    // All our supported platforms allow commercial use with proper attribution
+    switch (source) {
+      case 'pixabay':
+      case 'unsplash': 
+      case 'pexels':
+      case 'openclipart':
+        return true;
+      case 'wikimedia':
+        // For Wikimedia, rely on LICENSE_OPTIONS matching
+        return license.toLowerCase().includes('cc0') || 
+               license.toLowerCase().includes('cc-by') || 
+               license.toLowerCase().includes('cc by');
+      default:
+        return false;
+    }
+  }
 
   return (
     <Card 
@@ -48,14 +67,22 @@ export function ImageCard({ image, onImageClick, onToggleFavorite, isFavorite }:
           >
             {image.license}
           </Badge>
-          {/* Source badge */}
-          <Badge 
-            variant="outline"
-            className="text-xs font-medium"
-            data-testid="source-badge"
+          {/* Source badge - clickable hot link */}
+          <a 
+            href={image.sourceUrl}
+            target="_blank" 
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            data-testid={`link-source-${image.id}`}
           >
-            {image.source.charAt(0).toUpperCase() + image.source.slice(1)}
-          </Badge>
+            <Badge 
+              variant="outline"
+              className="text-xs font-medium hover:bg-accent cursor-pointer"
+              data-testid="source-badge"
+            >
+              {image.source.charAt(0).toUpperCase() + image.source.slice(1)}
+            </Badge>
+          </a>
           <Button
             size="sm"
             variant="ghost"
