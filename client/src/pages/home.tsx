@@ -2,23 +2,20 @@ import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { SearchBar } from "@/components/search-bar";
-import { FilterSidebar } from "@/components/filter-sidebar";
+import { SearchFilters } from "@/components/search-filters";
 import { ImageGrid } from "@/components/image-grid";
 import { ImageModal } from "@/components/image-modal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Grid3X3, List } from "lucide-react";
-import type { WikimediaImage, SearchFilters } from "@/types/wikimedia";
+import type { SearchResult, ImageSource } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filters, setFilters] = useState<SearchFilters>({
-    licenses: ["cc0", "cc-by", "cc-by-sa"],
-    size: "large",
-    fileTypes: ["jpg", "png"],
-  });
-  const [selectedImage, setSelectedImage] = useState<WikimediaImage | null>(null);
+  const [selectedLicenses, setSelectedLicenses] = useState<string[]>(["cc0", "cc-by", "cc-by-sa"]);
+  const [selectedSources, setSelectedSources] = useState<ImageSource[]>(["wikimedia", "pixabay", "unsplash", "pexels"]);
+  const [selectedImage, setSelectedImage] = useState<SearchResult | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState("relevance");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -27,7 +24,7 @@ export default function Home() {
 
   // Search images query
   const { data: searchResults, isLoading, error } = useQuery({
-    queryKey: [`/api/search?q=${encodeURIComponent(searchQuery)}&licenses=${filters.licenses.join(",")}&limit=20&offset=0`],
+    queryKey: [`/api/search?q=${encodeURIComponent(searchQuery)}&licenses=${selectedLicenses.join(",")}&sources=${selectedSources.join(",")}&limit=20&offset=0`],
     enabled: !!searchQuery,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
@@ -36,23 +33,24 @@ export default function Home() {
     setSearchQuery(query);
   }, []);
 
-  const handleFiltersChange = useCallback((newFilters: SearchFilters) => {
-    setFilters(newFilters);
+  const handleLicenseChange = useCallback((licenses: string[]) => {
+    setSelectedLicenses(licenses);
+  }, []);
+
+  const handleSourceChange = useCallback((sources: ImageSource[]) => {
+    setSelectedSources(sources);
   }, []);
 
   const handleClearFilters = useCallback(() => {
-    setFilters({
-      licenses: ["cc0", "cc-by", "cc-by-sa"],
-      size: "any",
-      fileTypes: [],
-    });
+    setSelectedLicenses(["cc0", "cc-by", "cc-by-sa"]);
+    setSelectedSources(["wikimedia", "pixabay", "unsplash", "pexels"]);
   }, []);
 
-  const handleImageClick = useCallback((image: WikimediaImage) => {
+  const handleImageClick = useCallback((image: SearchResult) => {
     setSelectedImage(image);
   }, []);
 
-  const handleToggleFavorite = useCallback((image: WikimediaImage) => {
+  const handleToggleFavorite = useCallback((image: SearchResult) => {
     const newFavorites = new Set(favorites);
     if (newFavorites.has(image.imageUrl)) {
       newFavorites.delete(image.imageUrl);
@@ -91,12 +89,26 @@ export default function Home() {
           </div>
         )}
 
+        {/* Search Filters */}
+        <SearchFilters 
+          selectedLicenses={selectedLicenses}
+          selectedSources={selectedSources}
+          onLicenseChange={handleLicenseChange}
+          onSourceChange={handleSourceChange}
+        />
+
         <div className="flex flex-col lg:flex-row gap-8">
-          <FilterSidebar 
-            filters={filters}
-            onFiltersChange={handleFiltersChange}
-            onClearFilters={handleClearFilters}
-          />
+          {/* Clear filters and other controls */}
+          <div className="lg:w-64 space-y-4">
+            <Button 
+              onClick={handleClearFilters}
+              variant="outline"
+              className="w-full"
+              data-testid="clear-filters-button"
+            >
+              Clear All Filters
+            </Button>
+          </div>
 
           <div className="flex-1">
             {searchQuery && (

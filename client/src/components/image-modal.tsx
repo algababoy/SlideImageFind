@@ -7,15 +7,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Heart, Share, Copy, Download } from "lucide-react";
-import type { WikimediaImage } from "@/types/wikimedia";
+import type { SearchResult } from "@shared/schema";
 import { downloadImage, copyToClipboard, LICENSE_OPTIONS } from "@/lib/wikimedia-api";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImageModalProps {
-  image: WikimediaImage | null;
+  image: SearchResult | null;
   isOpen: boolean;
   onClose: () => void;
-  onToggleFavorite: (image: WikimediaImage) => void;
+  onToggleFavorite: (image: SearchResult) => void;
   isFavorite: boolean;
 }
 

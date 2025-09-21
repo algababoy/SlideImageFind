@@ -15,6 +15,7 @@ export const searchHistory = pgTable("search_history", {
   query: text("query").notNull(),
   filters: json("filters").$type<{
     licenses: string[];
+    sources: ImageSource[];
     size: string;
     fileTypes: string[];
   }>(),
@@ -35,6 +36,8 @@ export const favorites = pgTable("favorites", {
   attribution: text("attribution").notNull(),
   dimensions: text("dimensions"),
   fileSize: text("file_size"),
+  source: text("source").$type<ImageSource>().notNull().default('wikimedia'),
+  sourceMetadata: json("source_metadata"),
   addedAt: timestamp("added_at").defaultNow(),
 });
 
@@ -52,6 +55,39 @@ export const insertFavoriteSchema = createInsertSchema(favorites).omit({
   id: true,
   addedAt: true,
 });
+
+// Image sources enum
+export type ImageSource = 'wikimedia' | 'pixabay' | 'unsplash' | 'pexels' | 'openclipart';
+
+// Unified SearchResult interface for all image sources
+export interface SearchResult {
+  id: string;
+  title: string;
+  imageUrl: string;
+  thumbnailUrl: string;
+  author?: string;
+  license: string;
+  licenseUrl?: string;
+  sourceUrl: string;
+  attribution: string;
+  dimensions?: string;
+  fileSize?: string;
+  source: ImageSource;
+  // Source-specific metadata
+  sourceMetadata?: {
+    // Pixabay
+    tags?: string;
+    downloads?: number;
+    views?: number;
+    // Unsplash
+    photographerUrl?: string;
+    unsplashUrl?: string;
+    // Pexels
+    avgColor?: string;
+    // Common
+    categories?: string[];
+  };
+}
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;

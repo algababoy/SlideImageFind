@@ -2,14 +2,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Heart } from "lucide-react";
-import type { WikimediaImage } from "@/types/wikimedia";
+import type { SearchResult } from "@shared/schema";
 import { useState } from "react";
 import { LICENSE_OPTIONS } from "@/lib/wikimedia-api";
 
 interface ImageCardProps {
-  image: WikimediaImage;
-  onImageClick: (image: WikimediaImage) => void;
-  onToggleFavorite: (image: WikimediaImage) => void;
+  image: SearchResult;
+  onImageClick: (image: SearchResult) => void;
+  onToggleFavorite: (image: SearchResult) => void;
   isFavorite: boolean;
 }
 
@@ -47,6 +47,14 @@ export function ImageCard({ image, onImageClick, onToggleFavorite, isFavorite }:
             data-testid="license-badge"
           >
             {image.license}
+          </Badge>
+          {/* Source badge */}
+          <Badge 
+            variant="outline"
+            className="text-xs font-medium"
+            data-testid="source-badge"
+          >
+            {image.source.charAt(0).toUpperCase() + image.source.slice(1)}
           </Badge>
           <Button
             size="sm"

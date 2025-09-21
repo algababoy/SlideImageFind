@@ -1,12 +1,12 @@
 import { ImageCard } from "./image-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { WikimediaImage } from "@/types/wikimedia";
+import type { SearchResult } from "@shared/schema";
 
 interface ImageGridProps {
-  images: WikimediaImage[];
+  images: SearchResult[];
   isLoading: boolean;
-  onImageClick: (image: WikimediaImage) => void;
-  onToggleFavorite: (image: WikimediaImage) => void;
+  onImageClick: (image: SearchResult) => void;
+  onToggleFavorite: (image: SearchResult) => void;
   favorites: Set<string>;
 }
 
