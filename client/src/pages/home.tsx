@@ -27,7 +27,7 @@ export default function Home() {
 
   // Search images query
   const { data: searchResults, isLoading, error } = useQuery({
-    queryKey: ["/api/search", searchQuery, filters.licenses.join(",")],
+    queryKey: [`/api/search?q=${encodeURIComponent(searchQuery)}&licenses=${filters.licenses.join(",")}&limit=20&offset=0`],
     enabled: !!searchQuery,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });

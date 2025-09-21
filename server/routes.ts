@@ -32,22 +32,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const params = {
         action: "query",
         format: "json",
-        generator: "search",
-        gsrsearch: query as string,
-        gsrlimit: limit,
-        gsroffset: offset,
-        prop: "imageinfo",
-        iiprop: "url|extmetadata|size",
-        iiurlwidth: "1200",
+        list: "search",
+        srsearch: query as string,
+        srnamespace: "6",  // File namespace
+        srlimit: limit,
+        sroffset: offset,
         origin: "*"
       };
 
       const response = await axios.get("https://commons.wikimedia.org/w/api.php", { params });
       const data = response.data;
+      
+      console.log(`Search query: ${query}`);
+      if (Object.keys((data.query || {}).pages || {}).length === 0) {
+        console.log('Full API response:', JSON.stringify(data, null, 2));
+      }
 
       const results: WikimediaSearchResult[] = [];
-      const pages = (data.query || {}).pages || {};
+      const searchResults = (data.query || {}).search || [];
+      console.log(`Found ${searchResults.length} files in search`);
 
+      // Now get image info for each found file
+      if (searchResults.length === 0) {
+        console.log('No files found in search results');
+        return res.json({ results, total: 0, query: query as string });
+      }
+
+      // Get titles for imageinfo query
+      const titles = searchResults.map((result: any) => result.title).join('|');
+      
+      // Second API call to get image details
+      const imageParams = {
+        action: "query",
+        format: "json",
+        prop: "imageinfo",
+        titles: titles,
+        iiprop: "url|extmetadata|size",
+        iiurlwidth: "1200",
+        origin: "*"
+      };
+      
+      const imageResponse = await axios.get("https://commons.wikimedia.org/w/api.php", { params: imageParams });
+      const imageData = imageResponse.data;
+      const pages = (imageData.query || {}).pages || {};
+      
       for (const pageId in pages) {
         const page = pages[pageId];
         const imageInfo = (page.imageinfo || [])[0];
@@ -60,11 +88,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const artist = metadata.Artist?.value || "";
         const credit = metadata.Credit?.value || "";
         
-        // Filter by license
-        const licenseMatch = licensesArray.some(license => 
-          licenseShortName.toLowerCase().includes(license.toLowerCase())
-        );
+        // Filter by license with proper normalization
+        const normalizedLicense = licenseShortName.toLowerCase().replace(/\s+/g, '-');
+        const isPublicDomain = normalizedLicense.includes('public-domain') || normalizedLicense.includes('cc0');
         
+        let licenseMatch = false;
+        if (isPublicDomain && licensesArray.includes('cc0')) {
+          licenseMatch = true;
+        } else {
+          licenseMatch = licensesArray.some(license => {
+            if (license === 'cc-by-sa') {
+              return normalizedLicense.includes('cc-by-sa');
+            } else if (license === 'cc-by') {
+              return normalizedLicense.includes('cc-by') && !normalizedLicense.includes('-sa') && !normalizedLicense.includes('-nc');
+            }
+            return normalizedLicense.includes(license);
+          });
+        }
+        
+        console.log(`License check: ${page.title}, License: '${licenseShortName}' -> '${normalizedLicense}', Expected: ${licensesArray}, Match: ${licenseMatch}`);
         if (!licenseMatch && licensesArray.length > 0) continue;
 
         // Generate attribution text
