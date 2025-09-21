@@ -263,19 +263,32 @@ export class ImageSearchService {
 
   private async searchOpenClipart(query: string, limit: number): Promise<SearchResult[]> {
     try {
-      // OpenClipart doesn't require API key - public RSS/JSON API
+      console.log(`[OpenClipart] Searching for "${query}" with limit ${limit}`);
+      
+      // OpenClipart API is currently experiencing issues (502 errors)
+      // Try the main search API endpoint
       const response = await axios.get('https://openclipart.org/search/json/', {
         params: {
           query: query,
           amount: Math.max(limit, 20), // OpenClipart minimum
           sort: 'downloads'
         },
-        timeout: 10000
+        timeout: 15000,
+        headers: {
+          'User-Agent': 'PresentationFinder/1.0 (Image Search Application)'
+        }
       });
 
-      const items = response.data.payload || [];
+      console.log(`[OpenClipart] API response status: ${response.status}`);
+      const items = response.data?.payload || [];
+      console.log(`[OpenClipart] Found ${items.length} items`);
 
-      return items.slice(0, limit).map((item: any) => ({
+      if (!items.length) {
+        console.warn(`[OpenClipart] No results found for query: ${query}`);
+        return [];
+      }
+
+      const results = items.slice(0, limit).map((item: any) => ({
         id: `openclipart-${item.id}`,
         title: item.title || `OpenClipart ${item.id}`,
         imageUrl: item.svg?.png_full_lossy || item.detail_link,
@@ -293,8 +306,21 @@ export class ImageSearchService {
           svgUrl: item.svg?.url
         }
       }));
-    } catch (error) {
-      console.error('OpenClipart search error:', error);
+
+      console.log(`[OpenClipart] Returning ${results.length} results`);
+      return results;
+    } catch (error: any) {
+      console.error(`[OpenClipart] Search error for "${query}":`, {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data?.substring?.(0, 200) + '...'
+      });
+      
+      // OpenClipart is currently down - return empty results gracefully
+      if (error.response?.status === 502) {
+        console.warn('[OpenClipart] Service unavailable (502) - skipping OpenClipart results');
+      }
+      
       return [];
     }
   }

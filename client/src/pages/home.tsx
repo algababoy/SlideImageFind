@@ -22,11 +22,15 @@ export default function Home() {
   
   const { toast } = useToast();
 
-  // Search images query
+  // Search images query - build URL with proper serialization (avoid state mutation)
+  const licensesParam = [...selectedLicenses].sort().join(",");
+  const sourcesParam = [...selectedSources].sort().join(",");
+  const searchUrl = `/api/search?q=${encodeURIComponent(searchQuery)}&licenses=${licensesParam}&sources=${sourcesParam}&limit=20&offset=0`;
+  
   const { data: searchResults, isLoading, error } = useQuery({
-    queryKey: [`/api/search?q=${encodeURIComponent(searchQuery)}&licenses=${selectedLicenses.join(",")}&sources=${selectedSources.join(",")}&limit=20&offset=0`],
+    queryKey: [searchUrl],
     enabled: !!searchQuery,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 30 * 1000, // Cache for 30 seconds to allow filter changes
   });
 
   const handleSearch = useCallback((query: string) => {
