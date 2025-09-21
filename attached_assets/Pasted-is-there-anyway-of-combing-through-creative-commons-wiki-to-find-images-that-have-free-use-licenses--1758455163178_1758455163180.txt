@@ -1,0 +1,210 @@
+is there anyway of combing through creative commons wiki to find images that have free use licenses on different topics
+ChatGPT said:
+
+Yes — there are several ways to comb through Wikimedia Commons (and related sites) to find images that are under free / Creative Commons / public domain licenses. Depending on what exactly you mean by “free use” (just attribution, commercial use, modify, etc.), there are tools and filters to help. I’ll walk through how, and then I can show you some tools if you want.
+
+How to search for freely-licensed images on Wikimedia Commons
+
+Search & filters on Commons directly
+
+Go to Wikimedia Commons
+.
+
+Use the search box with keywords for what you’re looking for.
+
+After the initial search, use the filters (on the search results page) to narrow by License (e.g. “Creative Commons Attribution”, “Public domain”, etc.), by file type, size, etc. 
+CUNY Pressbooks
++2
+cotr.libguides.com
++2
+
+You can also filter by “Community Assessments” (quality, featured pictures) and other attributes. 
+CUNY Pressbooks
++1
+
+Using structured data / advanced search queries
+Wikimedia Commons supports structured data and “Wikidata statements” for things like license type. For example, you can search for files with a particular license tag using haswbstatement:P275=... (where P275 is the property for license, and there are specific Q-IDs for CC0, etc.). 
+Wikimedia Commons
+
+So for example, if you want images under CC0, you'd use something like haswbstatement:P275=Q6938433 in the search query. 
+Wikimedia Commons
+
+Check the license on individual image pages
+Even after filtering, you should click on an image and look at the image’s page. It will show the specific license, any restrictions (commercial / non-commercial, derivatives allowed or not), author, attribution text, etc. Always double check. 
+Plagiarism Today
++1
+
+Use tools / guides
+
+Commons has help pages like Help:Image searching and Help:Search. 
+Wikimedia Commons
++1
+
+There are library / academic guides (e.g. “Finding & Using Online Images”) that show how to use Commons properly with license tracking. 
+cotr.libguides.com
+
+Other tools that aggregate free-licensed images
+
+If you want to search more broadly (not just Wikimedia Commons), there are other services that include Commons plus many other sources:
+
+Openverse: a search engine that indexes open content (Creative Commons, public domain, etc.) from multiple sources, including Wikimedia Commons. 
+Wikipedia
+
+Creative Commons Search Portal: helps find CC licensed works across various platforms. 
+CC Search
+
+If you want, I can give you a couple of example queries or even build you a small workflow / tool to easily fetch images under certain licenses on a topic you care about (e.g. “birds”, “architecture”, etc.). Do you want me to do that for you (and what topic)?
+
+You said:
+can I integrate that i into a program 
+ChatGPT said:
+Thought for 8s
+
+Absolutely. You’ve got (at least) two solid, programmatic paths:
+
+1) Wikimedia Commons (MediaWiki Action API)
+
+You can query Commons directly, filter by license, and pull attribution metadata.
+
+Python example (search + grab image URLs + attribution)
+import requests
+
+def commons_search(topic, licenses=("cc-by", "cc-by-sa", "cc0"), limit=20):
+    """
+    topic: search keywords, e.g. "red fox"
+    licenses: Commons license codes to allow (case-insensitive)
+    """
+    S = requests.Session()
+    params = {
+        "action": "query",
+        "format": "json",
+        "generator": "search",
+        "gsrsearch": topic,
+        "gsrlimit": limit,
+        "prop": "imageinfo",
+        "iiprop": "url|extmetadata",
+        "iiurlwidth": 1200,  # nice-sized preview
+        "origin": "*"
+    }
+    r = S.get("https://commons.wikimedia.org/w/api.php", params=params).json()
+
+    out = []
+    pages = (r.get("query") or {}).get("pages", {})
+    for _, p in pages.items():
+        ii = (p.get("imageinfo") or [{}])[0]
+        meta = ii.get("extmetadata", {})
+        lic_short = (meta.get("LicenseShortName", {}).get("value") or "").lower()
+        # Quick license gate (you can make this stricter—e.g., exclude NC/ND)
+        if any(L in lic_short for L in licenses):
+            out.append({
+                "title": p.get("title"),
+                "file_page": f"https://commons.wikimedia.org/wiki/{p.get('title').replace(' ', '_')}",
+                "image_url": ii.get("url"),
+                "thumbnail": ii.get("thumburl"),
+                "license": meta.get("LicenseShortName", {}).get("value"),
+                "license_url": meta.get("LicenseUrl", {}).get("value"),
+                "author": meta.get("Artist", {}).get("value"),
+                "credit": meta.get("Credit", {}).get("value"),
+                "attribution_required": meta.get("AttributionRequired", {}).get("value"),
+                "usage_terms": meta.get("UsageTerms", {}).get("value"),
+            })
+    return out
+
+if __name__ == "__main__":
+    results = commons_search("red fox", licenses=("cc0", "cc-by", "cc-by-sa"), limit=15)
+    for r in results:
+        print(r["title"], "→", r["image_url"], "|", r["license"])
+
+
+Notes:
+
+The extmetadata block includes what you need to build proper attribution (author, title, license, link).
+
+If you need only public-domain/CC0, change licenses=("cc0",) or additionally verify with UsageTerms, LicenseUrl, etc.
+
+To be stricter (e.g., exclude NC/ND), explicitly check LicenseShortName or LicenseUrl.
+
+JS/Node (same idea)
+async function commonsSearch(topic, allowed = ["CC0", "CC-BY", "CC-BY-SA"], limit = 20) {
+  const params = new URLSearchParams({
+    action: "query",
+    format: "json",
+    generator: "search",
+    gsrsearch: topic,
+    gsrlimit: String(limit),
+    prop: "imageinfo",
+    iiprop: "url|extmetadata",
+    iiurlwidth: "1200",
+    origin: "*"
+  });
+
+  const res = await fetch("https://commons.wikimedia.org/w/api.php?" + params.toString());
+  const data = await res.json();
+  const pages = (data.query || {}).pages || {};
+  return Object.values(pages).map(p => {
+    const ii = (p.imageinfo || [])[0] || {};
+    const meta = ii.extmetadata || {};
+    const license = (meta.LicenseShortName && meta.LicenseShortName.value) || "";
+    if (!allowed.some(a => license.toUpperCase().includes(a))) return null;
+    return {
+      title: p.title,
+      filePage: "https://commons.wikimedia.org/wiki/" + p.title.replace(/ /g, "_"),
+      imageUrl: ii.url,
+      thumbnail: ii.thumburl,
+      license,
+      licenseUrl: meta.LicenseUrl && meta.LicenseUrl.value,
+      author: meta.Artist && meta.Artist.value,
+      attributionRequired: meta.AttributionRequired && meta.AttributionRequired.value,
+      usageTerms: meta.UsageTerms && meta.UsageTerms.value
+    };
+  }).filter(Boolean);
+}
+
+2) Openverse API (indexes Commons + many other open sources)
+
+If you want a single API with consistent filters (commercial use, modify, etc.), Openverse is great.
+
+Quick Python example
+import requests
+
+def openverse_search(q, license_types=("cc0","by","by-sa"), page=1, page_size=20):
+    # license_types are Openverse’s shorthand sets; you can also pass "license=cc0"
+    params = {
+        "q": q,
+        "license_type": ",".join(license_types),  # e.g., "cc0,by,by-sa"
+        "page": page,
+        "page_size": page_size
+    }
+    r = requests.get("https://api.openverse.org/v1/images", params=params, timeout=30)
+    r.raise_for_status()
+    items = r.json().get("results", [])
+    # Each item includes title, creator, license, license_url, foreign_landing_url, thumbnail, url, etc.
+    return [{
+        "title": it["title"],
+        "creator": it["creator"],
+        "image_url": it["url"],
+        "thumbnail": it["thumbnail"],
+        "license": it["license"],
+        "license_url": it["license_url"],
+        "source_page": it["foreign_landing_url"]
+    } for it in items]
+
+When to choose which
+
+Wikimedia Commons API: maximal control over Commons’ structured metadata, featured/quality flags, categories, etc.
+
+Openverse API: one query hits many sources (including Commons), simpler license filters across sites.
+
+Implementation tips
+
+Store attribution with every download (title, author, license, source URL, license URL). Render it wherever you display the image.
+
+Filter licenses intentionally: if you need “commercial use + modifications allowed,” accept only CC0, CC-BY, CC-BY-SA. Exclude NC/ND variants.
+
+Respect file types & sizes: Commons can return width/height and thumbnails (iiurlwidth) to save bandwidth.
+
+Topic bucketing: You can also query by Commons categories (e.g., Category:Red_foxes) via the API, or use Wikidata/Structured Data filters later if you want fancy semantic queries.
+
+Caching: cache results to avoid hitting rate limits and to speed up repeat queries.
+
+If you tell me your language/runtime (Python, Node, browser, etc.) and the exact license constraints you need, I can tailor a drop-in module for you.
