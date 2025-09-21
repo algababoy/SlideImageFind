@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLicenses, setSelectedLicenses] = useState<string[]>(["cc0", "cc-by", "cc-by-sa"]);
-  const [selectedSources, setSelectedSources] = useState<ImageSource[]>(["wikimedia", "pixabay", "unsplash", "pexels"]);
+  const [selectedSources, setSelectedSources] = useState<ImageSource[]>(["wikimedia", "pixabay", "unsplash", "pexels", "openclipart"]);
   const [selectedImage, setSelectedImage] = useState<SearchResult | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState("relevance");
@@ -43,7 +43,7 @@ export default function Home() {
 
   const handleClearFilters = useCallback(() => {
     setSelectedLicenses(["cc0", "cc-by", "cc-by-sa"]);
-    setSelectedSources(["wikimedia", "pixabay", "unsplash", "pexels"]);
+    setSelectedSources(["wikimedia", "pixabay", "unsplash", "pexels", "openclipart"]);
   }, []);
 
   const handleImageClick = useCallback((image: SearchResult) => {

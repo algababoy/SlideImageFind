@@ -31,6 +31,10 @@ export class ImageSearchService {
     if (sources.includes("pexels") && this.pexelsApiKey) {
       searches.push(this.searchPexels(query, limitPerSource));
     }
+    
+    if (sources.includes("openclipart")) {
+      searches.push(this.searchOpenClipart(query, limitPerSource));
+    }
 
     // Execute all searches in parallel
     const results = await Promise.allSettled(searches);
@@ -255,6 +259,44 @@ export class ImageSearchService {
         avgColor: photo.avg_color
       }
     }));
+  }
+
+  private async searchOpenClipart(query: string, limit: number): Promise<SearchResult[]> {
+    try {
+      // OpenClipart doesn't require API key - public RSS/JSON API
+      const response = await axios.get('https://openclipart.org/search/json/', {
+        params: {
+          query: query,
+          amount: Math.max(limit, 20), // OpenClipart minimum
+          sort: 'downloads'
+        },
+        timeout: 10000
+      });
+
+      const items = response.data.payload || [];
+
+      return items.slice(0, limit).map((item: any) => ({
+        id: `openclipart-${item.id}`,
+        title: item.title || `OpenClipart ${item.id}`,
+        imageUrl: item.svg?.png_full_lossy || item.detail_link,
+        thumbnailUrl: item.svg?.png_thumb || item.svg?.png_2400px,
+        author: item.uploader?.name || "OpenClipart",
+        license: "Public Domain",
+        licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+        sourceUrl: item.detail_link,
+        attribution: `Image from OpenClipart (Public Domain)`,
+        dimensions: null, // SVG doesn't have fixed dimensions
+        source: 'openclipart' as ImageSource,
+        sourceMetadata: {
+          downloads: item.downloaded_by,
+          tags: item.tags?.join(', ') || '',
+          svgUrl: item.svg?.url
+        }
+      }));
+    } catch (error) {
+      console.error('OpenClipart search error:', error);
+      return [];
+    }
   }
 
   private shuffleArray<T>(array: T[]): T[] {

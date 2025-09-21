@@ -19,7 +19,8 @@ const SOURCE_OPTIONS: { id: ImageSource; label: string; description: string }[] 
   { id: 'wikimedia', label: 'Wikimedia Commons', description: 'Community-curated repository' },
   { id: 'pixabay', label: 'Pixabay', description: 'Free stock photography' },
   { id: 'unsplash', label: 'Unsplash', description: 'Beautiful free photos' },
-  { id: 'pexels', label: 'Pexels', description: 'Free stock photos & videos' }
+  { id: 'pexels', label: 'Pexels', description: 'Free stock photos & videos' },
+  { id: 'openclipart', label: 'OpenClipart', description: 'Public domain clipart & SVGs' }
 ];
 
 export function SearchFilters({ 
