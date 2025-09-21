@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Heart } from "lucide-react";
 import type { SearchResult } from "@shared/schema";
 import { useState } from "react";
-import { LICENSE_OPTIONS } from "@/lib/wikimedia-api";
+import { getCommercialUseStatus, getSourceDisplayName } from "@/utils/commercial-use";
 
 interface ImageCardProps {
   image: SearchResult;
@@ -16,30 +16,7 @@ interface ImageCardProps {
 export function ImageCard({ image, onImageClick, onToggleFavorite, isFavorite }: ImageCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   
-  const licenseOption = LICENSE_OPTIONS.find(opt => 
-    image.license.toLowerCase().includes(opt.value)
-  );
-  
-  // Handle commercial use for all sources
-  const isCommercial = licenseOption?.commercial ?? getCommercialUseStatus(image.source, image.license);
-
-  function getCommercialUseStatus(source: string, license: string): boolean {
-    // All our supported platforms allow commercial use with proper attribution
-    switch (source) {
-      case 'pixabay':
-      case 'unsplash': 
-      case 'pexels':
-      case 'openclipart':
-        return true;
-      case 'wikimedia':
-        // For Wikimedia, rely on LICENSE_OPTIONS matching
-        return license.toLowerCase().includes('cc0') || 
-               license.toLowerCase().includes('cc-by') || 
-               license.toLowerCase().includes('cc by');
-      default:
-        return false;
-    }
-  }
+  const isCommercial = getCommercialUseStatus(image);
 
   return (
     <Card 
@@ -80,7 +57,7 @@ export function ImageCard({ image, onImageClick, onToggleFavorite, isFavorite }:
               className="text-xs font-medium hover:bg-accent cursor-pointer"
               data-testid="source-badge"
             >
-              {image.source.charAt(0).toUpperCase() + image.source.slice(1)}
+              {getSourceDisplayName(image.source)}
             </Badge>
           </a>
           <Button

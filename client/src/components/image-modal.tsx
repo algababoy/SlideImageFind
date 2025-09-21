@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Heart, Share, Copy, Download } from "lucide-react";
 import type { SearchResult } from "@shared/schema";
-import { downloadImage, copyToClipboard, LICENSE_OPTIONS } from "@/lib/wikimedia-api";
+import { downloadImage, copyToClipboard } from "@/lib/wikimedia-api";
 import { useToast } from "@/hooks/use-toast";
+import { getCommercialUseStatus, getSourceDisplayName } from "@/utils/commercial-use";
 
 interface ImageModalProps {
   image: SearchResult | null;
@@ -24,11 +25,7 @@ export function ImageModal({ image, isOpen, onClose, onToggleFavorite, isFavorit
 
   if (!image) return null;
 
-  const licenseOption = LICENSE_OPTIONS.find(opt => 
-    image.license.toLowerCase().includes(opt.value)
-  );
-  
-  const isCommercial = licenseOption?.commercial ?? false;
+  const isCommercial = getCommercialUseStatus(image);
 
   const handleDownloadOriginal = () => {
     downloadImage(image.imageUrl, `${image.title}-original`);
@@ -108,15 +105,21 @@ export function ImageModal({ image, isOpen, onClose, onToggleFavorite, isFavorit
               <div>
                 <label className="text-sm font-medium text-foreground">License</label>
                 <div className="flex items-center space-x-2 mt-1">
-                  <a 
-                    href={image.licenseUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Badge className="text-xs font-medium bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer">
+                  {image.licenseUrl ? (
+                    <a 
+                      href={image.licenseUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Badge className="text-xs font-medium bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer">
+                        {image.license}
+                      </Badge>
+                    </a>
+                  ) : (
+                    <Badge className="text-xs font-medium bg-accent text-accent-foreground">
                       {image.license}
                     </Badge>
-                  </a>
+                  )}
                   <Badge 
                     variant={isCommercial ? "default" : "destructive"}
                     className="text-xs"
@@ -153,9 +156,7 @@ export function ImageModal({ image, isOpen, onClose, onToggleFavorite, isFavorit
                   className="text-primary hover:underline text-sm block"
                   data-testid="modal-source-link"
                 >
-                  {image.source.charAt(0).toUpperCase() + image.source.slice(1)}
-                  {image.source === 'wikimedia' && ' Commons'}
-                  {image.source === 'openclipart' && 'art'}
+                  {getSourceDisplayName(image.source)}
                 </a>
               </div>
               
