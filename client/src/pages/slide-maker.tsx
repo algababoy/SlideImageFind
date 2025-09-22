@@ -1085,7 +1085,6 @@ export default function ClassSlides() {
   // Helper function to render overlay bands
   const renderOverlayBands = (bands: OverlayBand[], isPreview: boolean = false) => {
     if (!bands || bands.length === 0) return null;
-    
     return bands
       .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)) // Sort by z-index
       .map((band) => {
@@ -1096,7 +1095,7 @@ export default function ClassSlides() {
         const isSelected = selectedBandId === band.id;
         
         return (
-          <div key={band.id} className="absolute">
+          <div key={band.id}>
             {/* Main band element */}
             <div
               className={`absolute ${!isPreview ? 'cursor-move' : ''} ${isSelected && !isPreview ? 'ring-2 ring-blue-400' : ''}`}
