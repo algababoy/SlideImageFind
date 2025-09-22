@@ -205,7 +205,68 @@ export default function ClassSlides() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Overlay band interaction state
+  const [selectedBandId, setSelectedBandId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
+  const [dragStart, setDragStart] = useState<{x: number, y: number, bandXStart: number, bandYStart: number, bandXEnd: number, bandYEnd: number} | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
   const currentSlide = slides[currentSlideIndex];
+
+  // Global mouse event listeners for better drag/resize experience
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (isDragging || isResizing) {
+        // Convert native event to React event for compatibility
+        const reactEvent = {
+          clientX: e.clientX,
+          clientY: e.clientY,
+          preventDefault: () => e.preventDefault(),
+          stopPropagation: () => e.stopPropagation(),
+        } as React.MouseEvent;
+        handleMouseMove(reactEvent);
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isDragging || isResizing) {
+        handleMouseUp();
+      }
+    };
+
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDragging, isResizing, dragStart, selectedBandId, previewRef]);
+
+  // Keyboard event handlers for better UX
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isDragging || isResizing) {
+          // Cancel drag/resize operation
+          setIsDragging(false);
+          setIsResizing(false);
+          setResizeHandle(null);
+          setDragStart(null);
+        } else if (selectedBandId) {
+          // Deselect band
+          setSelectedBandId(null);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isDragging, isResizing, selectedBandId]);
 
   // Search for images using our unified API
   const licensesParam = [...selectedLicenses].sort().join(",");
@@ -893,6 +954,127 @@ export default function ClassSlides() {
     updateSlide(currentSlide.id, { overlayBands: updatedBands });
   };
 
+  // Mouse event handlers for drag and resize
+  const handleBandMouseDown = (e: React.MouseEvent, bandId: string, handle?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!previewRef.current) return;
+    
+    const rect = previewRef.current.getBoundingClientRect();
+    const band = currentSlide?.overlayBands?.find(b => b.id === bandId);
+    if (!band) return;
+    
+    setSelectedBandId(bandId);
+    
+    const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
+    const x = (clientX / rect.width) * 100;
+    const y = (clientY / rect.height) * 100;
+    
+    if (handle) {
+      setIsResizing(true);
+      setResizeHandle(handle);
+    } else {
+      setIsDragging(true);
+    }
+    
+    setDragStart({
+      x,
+      y,
+      bandXStart: band.xStart,
+      bandYStart: band.yStart,
+      bandXEnd: band.xEnd,
+      bandYEnd: band.yEnd,
+    });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging && !isResizing) return;
+    if (!dragStart || !selectedBandId || !previewRef.current) return;
+    
+    const rect = previewRef.current.getBoundingClientRect();
+    const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
+    const x = Math.max(0, Math.min(100, (clientX / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, (clientY / rect.height) * 100));
+    
+    const deltaX = x - dragStart.x;
+    const deltaY = y - dragStart.y;
+    
+    if (isDragging) {
+      // Move the entire band while preserving size
+      const bandWidth = Math.abs(dragStart.bandXEnd - dragStart.bandXStart);
+      const bandHeight = Math.abs(dragStart.bandYEnd - dragStart.bandYStart);
+      
+      // Clamp delta to keep band within bounds
+      const maxDeltaX = Math.min(deltaX, 100 - Math.max(dragStart.bandXStart, dragStart.bandXEnd));
+      const minDeltaX = Math.max(deltaX, 0 - Math.min(dragStart.bandXStart, dragStart.bandXEnd));
+      const clampedDeltaX = Math.max(minDeltaX, Math.min(maxDeltaX, deltaX));
+      
+      const maxDeltaY = Math.min(deltaY, 100 - Math.max(dragStart.bandYStart, dragStart.bandYEnd));
+      const minDeltaY = Math.max(deltaY, 0 - Math.min(dragStart.bandYStart, dragStart.bandYEnd));
+      const clampedDeltaY = Math.max(minDeltaY, Math.min(maxDeltaY, deltaY));
+      
+      const newXStart = dragStart.bandXStart + clampedDeltaX;
+      const newYStart = dragStart.bandYStart + clampedDeltaY;
+      const newXEnd = dragStart.bandXEnd + clampedDeltaX;
+      const newYEnd = dragStart.bandYEnd + clampedDeltaY;
+      
+      updateOverlayBand(selectedBandId, {
+        xStart: newXStart,
+        yStart: newYStart,
+        xEnd: newXEnd,
+        yEnd: newYEnd,
+      });
+    } else if (isResizing && resizeHandle) {
+      // Resize the band based on the handle with minimum size constraints
+      let newXStart = dragStart.bandXStart;
+      let newYStart = dragStart.bandYStart;
+      let newXEnd = dragStart.bandXEnd;
+      let newYEnd = dragStart.bandYEnd;
+      
+      const minSize = 2; // Minimum 2% size
+      
+      // Handle horizontal resizing
+      if (resizeHandle.includes('w')) {
+        newXStart = Math.max(0, Math.min(newXEnd - minSize, x));
+      }
+      if (resizeHandle.includes('e')) {
+        newXEnd = Math.min(100, Math.max(newXStart + minSize, x));
+      }
+      
+      // Handle vertical resizing
+      if (resizeHandle.includes('n')) {
+        newYStart = Math.max(0, Math.min(newYEnd - minSize, y));
+      }
+      if (resizeHandle.includes('s')) {
+        newYEnd = Math.min(100, Math.max(newYStart + minSize, y));
+      }
+      
+      updateOverlayBand(selectedBandId, {
+        xStart: newXStart,
+        yStart: newYStart,
+        xEnd: newXEnd,
+        yEnd: newYEnd,
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setIsResizing(false);
+    setResizeHandle(null);
+    setDragStart(null);
+  };
+
+  // Clear selection when clicking outside
+  const handlePreviewClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      setSelectedBandId(null);
+    }
+  };
+
   const deleteOverlayBand = (bandId: string) => {
     if (!currentSlide) return;
     const updatedBands = (currentSlide.overlayBands || []).filter(band => band.id !== bandId);
@@ -910,22 +1092,115 @@ export default function ClassSlides() {
         const width = Math.max(band.xStart, band.xEnd) - left;
         const top = Math.min(band.yStart, band.yEnd);
         const height = Math.max(band.yStart, band.yEnd) - top;
+        const isSelected = selectedBandId === band.id;
         
         return (
-          <div
-            key={band.id}
-            className="absolute"
-            style={{
-              left: `${left}%`,
-              width: `${width}%`,
-              top: `${top}%`,
-              height: `${height}%`,
-              backgroundColor: band.color,
-              opacity: band.alpha,
-              zIndex: (band.zIndex || 0) + 10, // Ensure bands are above background but below text
-            }}
-            data-testid={`overlay-band-${band.id}`}
-          />
+          <div key={band.id} className="absolute">
+            {/* Main band element */}
+            <div
+              className={`absolute cursor-move ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+              style={{
+                left: `${left}%`,
+                width: `${width}%`,
+                top: `${top}%`,
+                height: `${height}%`,
+                backgroundColor: band.color,
+                opacity: band.alpha,
+                zIndex: (band.zIndex || 0) + 10,
+              }}
+              onMouseDown={(e) => handleBandMouseDown(e, band.id)}
+              data-testid={`overlay-band-${band.id}`}
+            />
+            
+            {/* Resize handles (only show for selected band and in edit mode) */}
+            {isSelected && !isPreviewMode && (
+              <>
+                {/* Corner handles */}
+                <div
+                  className="absolute w-3 h-3 bg-blue-500 border border-white cursor-nw-resize"
+                  style={{
+                    left: `calc(${left}% - 6px)`,
+                    top: `calc(${top}% - 6px)`,
+                    zIndex: (band.zIndex || 0) + 20,
+                  }}
+                  onMouseDown={(e) => handleBandMouseDown(e, band.id, 'nw')}
+                  data-testid={`resize-handle-nw-${band.id}`}
+                />
+                <div
+                  className="absolute w-3 h-3 bg-blue-500 border border-white cursor-ne-resize"
+                  style={{
+                    left: `calc(${left + width}% - 6px)`,
+                    top: `calc(${top}% - 6px)`,
+                    zIndex: (band.zIndex || 0) + 20,
+                  }}
+                  onMouseDown={(e) => handleBandMouseDown(e, band.id, 'ne')}
+                  data-testid={`resize-handle-ne-${band.id}`}
+                />
+                <div
+                  className="absolute w-3 h-3 bg-blue-500 border border-white cursor-sw-resize"
+                  style={{
+                    left: `calc(${left}% - 6px)`,
+                    top: `calc(${top + height}% - 6px)`,
+                    zIndex: (band.zIndex || 0) + 20,
+                  }}
+                  onMouseDown={(e) => handleBandMouseDown(e, band.id, 'sw')}
+                  data-testid={`resize-handle-sw-${band.id}`}
+                />
+                <div
+                  className="absolute w-3 h-3 bg-blue-500 border border-white cursor-se-resize"
+                  style={{
+                    left: `calc(${left + width}% - 6px)`,
+                    top: `calc(${top + height}% - 6px)`,
+                    zIndex: (band.zIndex || 0) + 20,
+                  }}
+                  onMouseDown={(e) => handleBandMouseDown(e, band.id, 'se')}
+                  data-testid={`resize-handle-se-${band.id}`}
+                />
+                
+                {/* Edge handles */}
+                <div
+                  className="absolute w-3 h-3 bg-blue-500 border border-white cursor-n-resize"
+                  style={{
+                    left: `calc(${left + width/2}% - 6px)`,
+                    top: `calc(${top}% - 6px)`,
+                    zIndex: (band.zIndex || 0) + 20,
+                  }}
+                  onMouseDown={(e) => handleBandMouseDown(e, band.id, 'n')}
+                  data-testid={`resize-handle-n-${band.id}`}
+                />
+                <div
+                  className="absolute w-3 h-3 bg-blue-500 border border-white cursor-s-resize"
+                  style={{
+                    left: `calc(${left + width/2}% - 6px)`,
+                    top: `calc(${top + height}% - 6px)`,
+                    zIndex: (band.zIndex || 0) + 20,
+                  }}
+                  onMouseDown={(e) => handleBandMouseDown(e, band.id, 's')}
+                  data-testid={`resize-handle-s-${band.id}`}
+                />
+                <div
+                  className="absolute w-3 h-3 bg-blue-500 border border-white cursor-w-resize"
+                  style={{
+                    left: `calc(${left}% - 6px)`,
+                    top: `calc(${top + height/2}% - 6px)`,
+                    zIndex: (band.zIndex || 0) + 20,
+                  }}
+                  onMouseDown={(e) => handleBandMouseDown(e, band.id, 'w')}
+                  data-testid={`resize-handle-w-${band.id}`}
+                />
+                <div
+                  className="absolute w-3 h-3 bg-blue-500 border border-white cursor-e-resize"
+                  style={{
+                    left: `calc(${left + width}% - 6px)`,
+                    top: `calc(${top + height/2}% - 6px)`,
+                    zIndex: (band.zIndex || 0) + 20,
+                  }}
+                  onMouseDown={(e) => handleBandMouseDown(e, band.id, 'e')}
+                  data-testid={`resize-handle-e-${band.id}`}
+                />
+              </>
+            )}
+          </div>
         );
       });
   };
@@ -1770,6 +2045,7 @@ export default function ClassSlides() {
               </CardHeader>
               <CardContent>
                 <div 
+                  ref={previewRef}
                   className="aspect-video bg-gray-100 border rounded-lg relative overflow-hidden"
                   style={{
                     backgroundColor: currentSlide?.backgroundColor || '#3B82F6',
@@ -1779,6 +2055,9 @@ export default function ClassSlides() {
                     backgroundSize: 'cover',
                     backgroundPosition: 'center'
                   }}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onClick={handlePreviewClick}
                 >
                   {/* Overlays */}
                   {currentSlide?.overlayType === 'horizontal' && (
