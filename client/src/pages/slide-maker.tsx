@@ -910,9 +910,10 @@ export default function ClassSlides() {
         <div 
           className="w-full h-full relative flex items-center justify-center"
           style={{
-            background: slide?.imageUrl 
+            backgroundColor: slide?.backgroundColor || '#3B82F6',
+            backgroundImage: slide?.imageUrl 
               ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${slide.imageUrl}')` 
-              : slide?.backgroundColor || '#3B82F6',
+              : 'none',
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
@@ -1514,9 +1515,10 @@ export default function ClassSlides() {
                 <div 
                   className="aspect-video bg-gray-100 border rounded-lg relative overflow-hidden"
                   style={{
-                    background: currentSlide?.imageUrl 
+                    backgroundColor: currentSlide?.backgroundColor || '#3B82F6',
+                    backgroundImage: currentSlide?.imageUrl 
                       ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${currentSlide.imageUrl}')` 
-                      : currentSlide?.backgroundColor || '#3B82F6',
+                      : 'none',
                     backgroundSize: 'cover',
                     backgroundPosition: 'center'
                   }}
