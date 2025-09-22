@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Header } from "@/components/header";
 import { SearchBar } from "@/components/search-bar";
 import { SearchFilters } from "@/components/search-filters";
@@ -8,7 +9,7 @@ import { ImageModal } from "@/components/image-modal";
 import { CommercialUseInfo } from "@/components/commercial-use-info";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Grid3X3, List } from "lucide-react";
+import { Grid3X3, List, PresentationIcon } from "lucide-react";
 import type { SearchResult, ImageSource } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
@@ -114,6 +115,18 @@ export default function Home() {
               Clear All Filters
             </Button>
             <CommercialUseInfo />
+            
+            {/* Slide Maker Link */}
+            <Link href="/slides">
+              <Button 
+                variant="default"
+                className="w-full"
+                data-testid="slide-maker-button"
+              >
+                <PresentationIcon className="h-4 w-4 mr-2" />
+                Create Slideshow
+              </Button>
+            </Link>
           </div>
 
           <div className="flex-1">
