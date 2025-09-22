@@ -1244,7 +1244,7 @@ export default function ClassSlides() {
           textAlign: section.align,
           fontFamily: FONT_STACKS[section.fontFamily],
           animationDelay: `${section.transitionDelay || 0}s`,
-          backgroundColor: isHighlighted && isPreview ? 'rgba(255, 255, 0, 0.1)' : 'transparent',
+          backgroundColor: 'transparent',
           borderRadius: isHighlighted && isPreview ? '8px' : '0',
           boxShadow: isHighlighted && isPreview ? '0 0 20px rgba(255, 255, 0, 0.3)' : 'none',
           zIndex: 100, // Ensure text sections always render above overlay bands and handles
