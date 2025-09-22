@@ -28,6 +28,7 @@ import {
   Palette,
   Type,
   AlertTriangle,
+  X,
 } from "lucide-react";
 
 /**
@@ -867,6 +868,37 @@ export default function ClassSlides() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [isPreviewMode, currentSlideIndex, currentSectionIndex, slides.length, slides]);
 
+  // Helper functions for overlay bands management
+  const addOverlayBand = () => {
+    if (!currentSlide) return;
+    const newBand: OverlayBand = {
+      id: `band-${Date.now()}`,
+      xStart: 20,
+      xEnd: 80,
+      yStart: 30,
+      yEnd: 70,
+      color: '#000000',
+      alpha: 0.5,
+      zIndex: 1
+    };
+    const updatedBands = [...(currentSlide.overlayBands || []), newBand];
+    updateSlide(currentSlide.id, { overlayBands: updatedBands });
+  };
+
+  const updateOverlayBand = (bandId: string, updates: Partial<OverlayBand>) => {
+    if (!currentSlide) return;
+    const updatedBands = (currentSlide.overlayBands || []).map(band =>
+      band.id === bandId ? { ...band, ...updates } : band
+    );
+    updateSlide(currentSlide.id, { overlayBands: updatedBands });
+  };
+
+  const deleteOverlayBand = (bandId: string) => {
+    if (!currentSlide) return;
+    const updatedBands = (currentSlide.overlayBands || []).filter(band => band.id !== bandId);
+    updateSlide(currentSlide.id, { overlayBands: updatedBands });
+  };
+
   // Helper function to render overlay bands
   const renderOverlayBands = (bands: OverlayBand[], isPreview: boolean = false) => {
     if (!bands || bands.length === 0) return null;
@@ -1320,6 +1352,140 @@ export default function ClassSlides() {
                       Ratio: {contrastWarning.ratio.toFixed(1)}
                     </div>
                   </div>
+                </div>
+
+                {/* Overlay Bands Management */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Overlay Bands</Label>
+                    <Button onClick={addOverlayBand} size="sm" variant="outline" data-testid="add-overlay-band-button">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Band
+                    </Button>
+                  </div>
+                  
+                  {currentSlide?.overlayBands && currentSlide.overlayBands.length > 0 && (
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {currentSlide.overlayBands.map((band, index) => (
+                        <div key={band.id} className="p-3 border rounded-lg bg-gray-50 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">Band {index + 1}</span>
+                            <Button 
+                              onClick={() => deleteOverlayBand(band.id)} 
+                              size="sm" 
+                              variant="outline"
+                              className="h-6 w-6 p-0"
+                              data-testid={`delete-band-${band.id}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          
+                          {/* Position controls */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs">X Start (%)</Label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={band.xStart}
+                                onChange={(e) => updateOverlayBand(band.id, { xStart: parseInt(e.target.value) })}
+                                className="w-full"
+                                data-testid={`band-x-start-${band.id}`}
+                              />
+                              <span className="text-xs text-gray-600">{band.xStart}%</span>
+                            </div>
+                            <div>
+                              <Label className="text-xs">X End (%)</Label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={band.xEnd}
+                                onChange={(e) => updateOverlayBand(band.id, { xEnd: parseInt(e.target.value) })}
+                                className="w-full"
+                                data-testid={`band-x-end-${band.id}`}
+                              />
+                              <span className="text-xs text-gray-600">{band.xEnd}%</span>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Y Start (%)</Label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={band.yStart}
+                                onChange={(e) => updateOverlayBand(band.id, { yStart: parseInt(e.target.value) })}
+                                className="w-full"
+                                data-testid={`band-y-start-${band.id}`}
+                              />
+                              <span className="text-xs text-gray-600">{band.yStart}%</span>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Y End (%)</Label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={band.yEnd}
+                                onChange={(e) => updateOverlayBand(band.id, { yEnd: parseInt(e.target.value) })}
+                                className="w-full"
+                                data-testid={`band-y-end-${band.id}`}
+                              />
+                              <span className="text-xs text-gray-600">{band.yEnd}%</span>
+                            </div>
+                          </div>
+                          
+                          {/* Color and alpha controls */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <Label className="text-xs">Color</Label>
+                              <input
+                                type="color"
+                                value={band.color}
+                                onChange={(e) => updateOverlayBand(band.id, { color: e.target.value })}
+                                className="w-full h-8 border rounded"
+                                data-testid={`band-color-${band.id}`}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Alpha</Label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={band.alpha}
+                                onChange={(e) => updateOverlayBand(band.id, { alpha: parseFloat(e.target.value) })}
+                                className="w-full"
+                                data-testid={`band-alpha-${band.id}`}
+                              />
+                              <span className="text-xs text-gray-600">{band.alpha}</span>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Z-Index</Label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                value={band.zIndex || 1}
+                                onChange={(e) => updateOverlayBand(band.id, { zIndex: parseInt(e.target.value) || 1 })}
+                                className="w-full h-8 px-2 border rounded"
+                                data-testid={`band-z-index-${band.id}`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {(!currentSlide?.overlayBands || currentSlide.overlayBands.length === 0) && (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No overlay bands. Click "Add Band" to create movable, resizable background elements.
+                    </p>
+                  )}
                 </div>
 
                 {/* Image settings */}
