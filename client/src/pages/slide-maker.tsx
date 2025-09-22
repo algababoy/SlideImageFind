@@ -1232,9 +1232,7 @@ export default function ClassSlides() {
     return (
       <div
         key={section.id}
-        className={`absolute ${getTransitionClass(section.transition)} ${
-          isHighlighted && isPreview ? 'ring-2 ring-yellow-400 ring-opacity-80' : ''
-        }`}
+        className={`absolute ${getTransitionClass(section.transition)}`}
         style={{
           left: `${left}%`,
           width: `${width}%`,
@@ -1245,8 +1243,8 @@ export default function ClassSlides() {
           fontFamily: FONT_STACKS[section.fontFamily],
           animationDelay: `${section.transitionDelay || 0}s`,
           backgroundColor: 'transparent',
-          borderRadius: isHighlighted && isPreview ? '8px' : '0',
-          boxShadow: isHighlighted && isPreview ? '0 0 20px rgba(255, 255, 0, 0.3)' : 'none',
+          borderRadius: '0',
+          boxShadow: 'none',
           zIndex: 100, // Ensure text sections always render above overlay bands and handles
         }}
       >
