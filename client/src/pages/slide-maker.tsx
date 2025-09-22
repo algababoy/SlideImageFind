@@ -78,6 +78,7 @@ interface Slide {
   textAlign?: TextAlign;   // legacy
   titleSize?: number; // rem
   bodySize?: number;  // rem
+  fontSizeScale?: number; // multiplier for all text (default 1.0)
   sections?: SlideSection[]; // NEW
 }
 
@@ -105,6 +106,7 @@ const DEFAULT_SLIDES: Slide[] = [
     textAlign: "center",
     titleSize: 3.5,
     bodySize: 1.4,
+    fontSizeScale: 1.0,
     sections: [
       {
         id: "s-1",
@@ -137,6 +139,7 @@ const DEFAULT_SLIDES: Slide[] = [
     textAlign: "left",
     titleSize: 2.6,
     bodySize: 1.2,
+    fontSizeScale: 1.0,
     sections: [
       {
         id: "s-2a",
@@ -261,6 +264,7 @@ export default function ClassSlides() {
         textAlign: "center",
         titleSize: 2.2,
         bodySize: 1.1,
+        fontSizeScale: 1.0,
         sections: [
           {
             id: `sec-${Date.now()}`,
@@ -579,16 +583,16 @@ export default function ClassSlides() {
                         font-family: ${FONT_STACKS[section.fontFamily]};
                         animation-delay: ${section.transitionDelay || 0}s;
                     " class="${section.transition ? `animate-${section.transition === 'fade' ? 'fadeIn' : section.transition === 'slide' ? 'slideInLeft' : section.transition === 'zoom' ? 'zoomIn' : section.transition === 'bounce' ? 'bounceIn' : ''}` : ''}">
-                        ${section.heading ? `<h3 style="margin-bottom: 0.5rem; font-size: ${(section.fontSize + 0.3) * 1.5}px; font-weight: bold;">${section.heading}</h3>` : ''}
-                        <div style="font-size: ${section.fontSize * 1.5}px; line-height: 1.45; white-space: pre-line;">${section.text}</div>
+                        ${section.heading ? `<h3 style="margin-bottom: 0.5rem; font-size: ${(section.fontSize + 0.3) * (slide.fontSizeScale || 1.0) * 16}px; font-weight: bold;">${section.heading}</h3>` : ''}
+                        <div style="font-size: ${section.fontSize * (slide.fontSizeScale || 1.0) * 16}px; line-height: 1.45; white-space: pre-line;">${section.text}</div>
                     </div>
                 `).join('') : `
                     <div class="slide-content" style="
                         text-align: ${slide.textAlign || 'center'};
                         color: ${slide.textColor || '#ffffff'};
                     ">
-                        <h1 style="font-size: ${(slide.titleSize || 3.5) * 16}px; margin-bottom: 1.5rem;">${slide.title}</h1>
-                        <p style="font-size: ${(slide.bodySize || 1.4) * 16}px; white-space: pre-line;">${slide.content}</p>
+                        <h1 style="font-size: ${(slide.titleSize || 3.5) * (slide.fontSizeScale || 1.0) * 16}px; margin-bottom: 1.5rem;">${slide.title}</h1>
+                        <p style="font-size: ${(slide.bodySize || 1.4) * (slide.fontSizeScale || 1.0) * 16}px; white-space: pre-line;">${slide.content}</p>
                     </div>
                 `}
             </div>
@@ -844,7 +848,9 @@ export default function ClassSlides() {
     const width = Math.max(section.xStart, section.xEnd) - left;
     const top = Math.min(section.yStart, section.yEnd);
     const height = Math.max(section.yStart, section.yEnd) - top;
-    const fontSizeRem = isPreview ? section.fontSize * 1.5 : section.fontSize;
+    const slide = slides.find(s => s.sections?.some(sec => sec.id === section.id));
+    const fontSizeScale = slide?.fontSizeScale || 1.0;
+    const fontSizeRem = section.fontSize * fontSizeScale;
     
     // Generate transition CSS class
     const getTransitionClass = (transition: TransitionType | undefined) => {
@@ -882,7 +888,7 @@ export default function ClassSlides() {
         {section.heading && (
           <h3 style={{
             margin: '0 0 0.5rem 0',
-            fontSize: `${fontSizeRem + 0.3}rem`,
+            fontSize: `${(section.fontSize + 0.3) * fontSizeScale}rem`,
             fontWeight: 'bold',
             color: section.color,
           }}>
@@ -951,10 +957,14 @@ export default function ClassSlides() {
               slide?.textAlign === 'left' ? 'text-left' : 
               slide?.textAlign === 'right' ? 'text-right' : 'text-center'
             }`}>
-              <h1 className="font-bold mb-6 text-white drop-shadow-lg text-5xl">
+              <h1 className="font-bold mb-6 text-white drop-shadow-lg" style={{
+                fontSize: `${(slide?.titleSize || 3.5) * (slide?.fontSizeScale || 1.0)}rem`
+              }}>
                 {slide?.title}
               </h1>
-              <p className="text-xl leading-relaxed text-white drop-shadow whitespace-pre-line">
+              <p className="leading-relaxed text-white drop-shadow whitespace-pre-line" style={{
+                fontSize: `${(slide?.bodySize || 1.4) * (slide?.fontSizeScale || 1.0)}rem`
+              }}>
                 {slide?.content}
               </p>
             </div>
@@ -1222,6 +1232,28 @@ export default function ClassSlides() {
                       data-testid="text-color-input"
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="font-scale">Font Size Scale</Label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        id="font-scale"
+                        type="range"
+                        min="0.5"
+                        max="3.0"
+                        step="0.1"
+                        value={currentSlide?.fontSizeScale || 1.0}
+                        onChange={(e) => updateSlide(currentSlide.id, { fontSizeScale: parseFloat(e.target.value) })}
+                        className="flex-1"
+                        data-testid="font-scale-slider"
+                      />
+                      <span className="text-sm text-gray-600 min-w-[2.5rem]">
+                        {(currentSlide?.fontSizeScale || 1.0).toFixed(1)}x
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label>Contrast</Label>
                     <div className={`flex items-center gap-2 text-sm ${contrastWarning.warn ? 'text-red-600' : 'text-green-600'}`}>
