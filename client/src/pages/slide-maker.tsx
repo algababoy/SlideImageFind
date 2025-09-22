@@ -584,7 +584,7 @@ export default function ClassSlides() {
             text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
         }
         .section { position: absolute; }
-        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
         .navigation { 
             position: fixed; bottom: 20px; right: 20px; z-index: 1000;
             display: flex; gap: 10px;
@@ -669,6 +669,7 @@ export default function ClassSlides() {
                         text-align: ${section.align};
                         font-family: ${FONT_STACKS[section.fontFamily]};
                         animation-delay: ${section.transitionDelay || 0}s;
+                        z-index: 100;
                     " class="${section.transition ? `animate-${section.transition === 'fade' ? 'fadeIn' : section.transition === 'slide' ? 'slideInLeft' : section.transition === 'zoom' ? 'zoomIn' : section.transition === 'bounce' ? 'bounceIn' : ''}` : ''}">
                         ${section.heading ? `<h3 style="margin-bottom: 0.5rem; font-size: ${(section.fontSize + 0.3) * (slide.fontSizeScale || 1.0) * 16}px; font-weight: bold;">${section.heading}</h3>` : ''}
                         <div style="font-size: ${section.fontSize * (slide.fontSizeScale || 1.0) * 16}px; line-height: 1.45; white-space: pre-line;">${section.text}</div>
@@ -1246,6 +1247,7 @@ export default function ClassSlides() {
           backgroundColor: isHighlighted && isPreview ? 'rgba(255, 255, 0, 0.1)' : 'transparent',
           borderRadius: isHighlighted && isPreview ? '8px' : '0',
           boxShadow: isHighlighted && isPreview ? '0 0 20px rgba(255, 255, 0, 0.3)' : 'none',
+          zIndex: 100, // Ensure text sections always render above overlay bands and handles
         }}
       >
         {section.heading && (
