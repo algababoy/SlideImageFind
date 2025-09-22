@@ -587,6 +587,16 @@ export default function ClassSlides() {
                     "></div>
                 ` : ''}
                 
+                ${slide.overlayBands && slide.overlayBands.length > 0 ? slide.overlayBands
+                  .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+                  .map(band => {
+                    const left = Math.min(band.xStart, band.xEnd);
+                    const width = Math.max(band.xStart, band.xEnd) - left;
+                    const top = Math.min(band.yStart, band.yEnd);
+                    const height = Math.max(band.yStart, band.yEnd) - top;
+                    return `<div style="position: absolute; left: ${left}%; width: ${width}%; top: ${top}%; height: ${height}%; background-color: ${band.color}; opacity: ${band.alpha}; z-index: ${(band.zIndex || 0) + 10};"></div>`;
+                  }).join('') : ''}
+                
                 ${useSections ? slide.sections!.map(section => `
                     <div class="section" style="
                         left: ${Math.min(section.xStart, section.xEnd)}%;
@@ -857,6 +867,37 @@ export default function ClassSlides() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [isPreviewMode, currentSlideIndex, currentSectionIndex, slides.length, slides]);
 
+  // Helper function to render overlay bands
+  const renderOverlayBands = (bands: OverlayBand[], isPreview: boolean = false) => {
+    if (!bands || bands.length === 0) return null;
+    
+    return bands
+      .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)) // Sort by z-index
+      .map((band) => {
+        const left = Math.min(band.xStart, band.xEnd);
+        const width = Math.max(band.xStart, band.xEnd) - left;
+        const top = Math.min(band.yStart, band.yEnd);
+        const height = Math.max(band.yStart, band.yEnd) - top;
+        
+        return (
+          <div
+            key={band.id}
+            className="absolute"
+            style={{
+              left: `${left}%`,
+              width: `${width}%`,
+              top: `${top}%`,
+              height: `${height}%`,
+              backgroundColor: band.color,
+              opacity: band.alpha,
+              zIndex: (band.zIndex || 0) + 10, // Ensure bands are above background but below text
+            }}
+            data-testid={`overlay-band-${band.id}`}
+          />
+        );
+      });
+  };
+
   // Render section content for preview
   const renderSection = (section: SlideSection, isPreview = false, isHighlighted = false) => {
     const left = Math.min(section.xStart, section.xEnd);
@@ -950,6 +991,9 @@ export default function ClassSlides() {
               }}
             />
           )}
+
+          {/* Custom Overlay Bands */}
+          {renderOverlayBands(slide?.overlayBands || [], true)}
           
           {slide?.overlayType === 'sides' && (
             <div 
@@ -1581,6 +1625,9 @@ export default function ClassSlides() {
                       }}
                     />
                   )}
+
+                  {/* Custom Overlay Bands */}
+                  {renderOverlayBands(currentSlide?.overlayBands || [], true)}
                   
                   {currentSlide?.overlayType === 'sides' && (
                     <div 
