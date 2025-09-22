@@ -62,6 +62,17 @@ interface SlideSection {
   transitionDelay?: number; // seconds
 }
 
+interface OverlayBand {
+  id: string;
+  xStart: number; // 0..100 (% of slide width)
+  xEnd: number;   // 0..100 (% of slide width) must be > xStart
+  yStart: number; // 0..100 (% of slide height)
+  yEnd: number;   // 0..100 (% of slide height) must be > yStart
+  color: string;  // hex color
+  alpha: number;  // 0..1 transparency
+  zIndex?: number; // layering order (higher = on top)
+}
+
 interface Slide {
   id: string;
   title: string;
@@ -80,6 +91,7 @@ interface Slide {
   bodySize?: number;  // rem
   fontSizeScale?: number; // multiplier for all text (default 1.0)
   sections?: SlideSection[]; // NEW
+  overlayBands?: OverlayBand[]; // Configurable overlay bands
 }
 
 const FONT_STACKS: Record<FontFamily, string> = {
@@ -107,6 +119,7 @@ const DEFAULT_SLIDES: Slide[] = [
     titleSize: 3.5,
     bodySize: 1.4,
     fontSizeScale: 1.0,
+    overlayBands: [],
     sections: [
       {
         id: "s-1",
@@ -140,6 +153,7 @@ const DEFAULT_SLIDES: Slide[] = [
     titleSize: 2.6,
     bodySize: 1.2,
     fontSizeScale: 1.0,
+    overlayBands: [],
     sections: [
       {
         id: "s-2a",
@@ -265,6 +279,7 @@ export default function ClassSlides() {
         titleSize: 2.2,
         bodySize: 1.1,
         fontSizeScale: 1.0,
+        overlayBands: [],
         sections: [
           {
             id: `sec-${Date.now()}`,
