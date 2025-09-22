@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,10 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
-import { CommercialUseInfo } from "@/components/commercial-use-info";
 import { SearchFilters } from "@/components/search-filters";
 import { ImageGrid } from "@/components/image-grid";
+import { CommercialUseInfo } from "@/components/commercial-use-info";
 import type { SearchResult, ImageSource } from "@shared/schema";
 import { getCommercialUseStatus, getSourceDisplayName } from "@/utils/commercial-use";
 import {
@@ -31,12 +31,13 @@ import {
 } from "lucide-react";
 
 /**
- * Enhanced Class Slides Generator with Creative Commons Image Integration
- * - Multi-source image search (Wikimedia, Pixabay, Unsplash, Pexels, OpenClipart)
- * - Commercial use guidance for slideshow selling
- * - Proper attribution and hot linking to original sources
+ * Enhanced Class Slides Generator with Sections Support
  * - Per-slide multi sections (multiple text boxes per slide)
- * - HTML export with proper citations
+ * - Each section has: xStart/xEnd (as % width), font family, color, size, alignment, and content
+ * - Dual-handle width control implemented with two range inputs (xStart, xEnd) + live preview bar
+ * - Sections are included in JSON export/import and HTML export
+ * - Backward compatible: legacy title/content still render if no sections present
+ * - Integrated with multi-source Creative Commons image search
  */
 
 type SlideType = "title" | "content" | "image";
@@ -67,7 +68,7 @@ interface Slide {
   content: string; // legacy single block
   type: SlideType;
   imageUrl?: string;
-  imageSource?: SearchResult; // Use our SearchResult for complete attribution
+  imageSource?: SearchResult; // For MLA citations - using SearchResult for full metadata
   backgroundColor?: string;
   textColor?: string; // legacy color for title/content
   overlayType?: OverlayType;
@@ -91,9 +92,10 @@ const FONT_STACKS: Record<FontFamily, string> = {
 const DEFAULT_SLIDES: Slide[] = [
   {
     id: "1",
-    title: "Welcome to Your Presentation",
-    content: "Create amazing slideshows with Creative Commons images\nthat you can use commercially!",
+    title: "Welcome to PresentationFinder!",
+    content: "Create amazing slideshows with Creative Commons images\nFind the perfect images for your presentations",
     type: "title",
+    imageUrl: "https://images.unsplash.com/photo-1549144511-f099e773c147?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
     backgroundColor: "#3B82F6",
     textColor: "#ffffff",
     overlayType: "horizontal",
@@ -106,8 +108,8 @@ const DEFAULT_SLIDES: Slide[] = [
     sections: [
       {
         id: "s-1",
-        heading: "Welcome to Your Presentation",
-        text: "Create amazing slideshows with Creative Commons images\nthat you can use commercially!",
+        heading: "Welcome to PresentationFinder!",
+        text: "Create amazing slideshows with Creative Commons images\nFind the perfect images for your presentations",
         xStart: 20,
         xEnd: 80,
         yStart: 30,
@@ -124,7 +126,7 @@ const DEFAULT_SLIDES: Slide[] = [
   {
     id: "2",
     title: "Features",
-    content: `🖼️ Search 5 image sources\n📜 Proper attribution\n💼 Commercial use guidance\n🎨 Custom styling\n📤 HTML export`,
+    content: "🔍 Multi-source image search\n📷 Creative Commons licensing\n🎨 Professional slide design\n📝 MLA citation generation\n🌐 Commercial use guidance",
     type: "content",
     backgroundColor: "#10B981",
     textColor: "#ffffff",
@@ -139,9 +141,9 @@ const DEFAULT_SLIDES: Slide[] = [
       {
         id: "s-2a",
         heading: "Features",
-        text: `🖼️ Search 5 image sources\n📜 Proper attribution\n💼 Commercial use guidance\n🎨 Custom styling\n📤 HTML export`,
+        text: "🔍 Multi-source image search\n📷 Creative Commons licensing\n🎨 Professional slide design\n📝 MLA citation generation\n🌐 Commercial use guidance",
         xStart: 10,
-        xEnd: 90,
+        xEnd: 60,
         yStart: 20,
         yEnd: 80,
         fontFamily: "system",
@@ -151,19 +153,35 @@ const DEFAULT_SLIDES: Slide[] = [
         transition: "slide",
         transitionDelay: 0.3,
       },
+      {
+        id: "s-2b",
+        heading: "Commercial Use",
+        text: "All images are properly licensed for commercial presentations",
+        xStart: 62,
+        xEnd: 90,
+        yStart: 60,
+        yEnd: 85,
+        fontFamily: "display",
+        fontSize: 1.2,
+        color: "#FFD700",
+        align: "left",
+        transition: "bounce",
+        transitionDelay: 0.8,
+      },
     ],
   },
 ];
 
-export default function SlideMaker() {
+export default function ClassSlides() {
   const [presentationTitle, setPresentationTitle] = useState("My Presentation");
   const [slides, setSlides] = useState<Slide[]>(DEFAULT_SLIDES);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [showImageSearch, setShowImageSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLicenses, setSelectedLicenses] = useState<string[]>([]);
-  const [selectedSources, setSelectedSources] = useState<ImageSource[]>([]);
+  const [selectedLicenses, setSelectedLicenses] = useState<string[]>(["cc0", "cc-by", "cc-by-sa"]);
+  const [selectedSources, setSelectedSources] = useState<ImageSource[]>(["wikimedia", "pixabay", "unsplash", "pexels", "openclipart"]);
   const [directImageUrl, setDirectImageUrl] = useState<string>("");
   const [loadingDirectImage, setLoadingDirectImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -171,7 +189,7 @@ export default function SlideMaker() {
 
   const currentSlide = slides[currentSlideIndex];
 
-  // Search for images using our existing API
+  // Search for images using our unified API
   const licensesParam = [...selectedLicenses].sort().join(",");
   const sourcesParam = [...selectedSources].sort().join(",");
   const searchUrl = `/api/search?q=${encodeURIComponent(searchQuery)}&licenses=${licensesParam}&sources=${sourcesParam}&limit=20&offset=0`;
@@ -183,6 +201,15 @@ export default function SlideMaker() {
   });
 
   const images = (searchResults as any)?.results || [];
+
+  // Filter change handlers
+  const handleLicenseChange = (licenses: string[]) => {
+    setSelectedLicenses(licenses);
+  };
+
+  const handleSourceChange = (sources: ImageSource[]) => {
+    setSelectedSources(sources);
+  };
 
   // Utility functions
   const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -261,7 +288,7 @@ export default function SlideMaker() {
   const deleteSlide = (slideId: string) => {
     setSlides((prev) => {
       if (prev.length <= 1) {
-        toast({ title: "Cannot delete", description: "Must have at least one slide.", variant: "destructive" });
+        toast({ title: "Cannot delete", description: "At least one slide is required.", variant: "destructive" });
         return prev;
       }
       const idx = prev.findIndex((s) => s.id === slideId);
@@ -345,43 +372,25 @@ export default function SlideMaker() {
     );
   };
 
-  // Image selection from search results
-  const selectImage = (image: SearchResult) => {
-    updateSlide(currentSlide.id, { 
-      imageUrl: image.imageUrl, 
-      imageSource: image 
-    });
-    setShowImageSearch(false);
-    toast({ 
-      title: "Image added", 
-      description: `From ${getSourceDisplayName(image.source)} - ${getCommercialUseStatus(image) ? 'Commercial use allowed' : 'Check license terms'}`,
-      variant: "default" 
-    });
-  };
-
-  // Generate citations for all images used
-  const generateCitations = () => {
+  // Generate MLA citations for all images used
+  const generateMLACitations = () => {
     const citations: string[] = [];
     slides.forEach((slide, index) => {
       if (slide.imageSource) {
-        const img = slide.imageSource;
-        const sourceDisplay = getSourceDisplayName(img.source);
+        const source = slide.imageSource;
         let citation = '';
         
-        switch (img.source) {
-          case 'wikimedia':
-            citation = `"${img.title}." ${sourceDisplay}${img.author ? `, by ${img.author}` : ''}. Web. ${new Date().toLocaleDateString()}. <${img.sourceUrl}>.`;
-            break;
-          case 'unsplash':
-          case 'pexels':
-          case 'pixabay':
-            citation = `${img.author || 'Unknown'}. "${img.title}." ${sourceDisplay}. Web. ${new Date().toLocaleDateString()}. <${img.sourceUrl}>.`;
-            break;
-          case 'openclipart':
-            citation = `"${img.title}." ${sourceDisplay}. Public Domain. Web. ${new Date().toLocaleDateString()}. <${img.sourceUrl}>.`;
-            break;
-          default:
-            citation = `"${img.title}." ${sourceDisplay}. ${img.license}. Web. ${new Date().toLocaleDateString()}. <${img.sourceUrl}>.`;
+        // Generate citation based on source type
+        if (source.source === 'wikimedia') {
+          citation = `"${source.title}." Wikimedia Commons${source.author ? `, by ${source.author}` : ''}. Web. ${new Date().toISOString().split('T')[0]}. <${source.imageUrl}>.`;
+        } else if (source.source === 'unsplash') {
+          citation = `${source.author}. "${source.title}." Unsplash. Web. ${new Date().toISOString().split('T')[0]}. <${source.imageUrl}>.`;
+        } else if (source.source === 'pixabay') {
+          citation = `${source.author}. "${source.title}." Pixabay. Web. ${new Date().toISOString().split('T')[0]}. <${source.imageUrl}>.`;
+        } else if (source.source === 'pexels') {
+          citation = `${source.author}. "${source.title}." Pexels. Web. ${new Date().toISOString().split('T')[0]}. <${source.imageUrl}>.`;
+        } else if (source.source === 'openclipart') {
+          citation = `${source.author}. "${source.title}." OpenClipart. Web. ${new Date().toISOString().split('T')[0]}. <${source.imageUrl}>.`;
         }
         
         if (citation) {
@@ -392,13 +401,14 @@ export default function SlideMaker() {
     return citations;
   };
 
-  // Filter change handlers
-  const handleLicenseChange = (licenses: string[]) => {
-    setSelectedLicenses(licenses);
-  };
-
-  const handleSourceChange = (sources: ImageSource[]) => {
-    setSelectedSources(sources);
+  // Image selection
+  const selectImage = (image: SearchResult) => {
+    updateSlide(currentSlide.id, { imageUrl: image.imageUrl, imageSource: image });
+    setShowImageSearch(false);
+    toast({
+      title: "Image added",
+      description: `Added "${image.title}" from ${getSourceDisplayName(image.source)}`,
+    });
   };
 
   // File upload handling
@@ -409,23 +419,24 @@ export default function SlideMaker() {
       reader.onload = (e) => {
         const imageUrl = e.target?.result as string;
         const imageSource: SearchResult = {
-          id: Date.now().toString(),
+          id: `upload-${Date.now()}`,
           title: file.name.replace(/\.[^/.]+$/, ""),
           imageUrl,
           thumbnailUrl: imageUrl,
-          author: 'User Upload',
-          license: 'Personal Use',
-          source: 'upload' as any,
+          author: "Local Upload",
+          source: "wikimedia", // Default for local uploads
+          license: "Local File",
           sourceUrl: imageUrl,
-          attribution: `"${file.name}" - Personal Upload`
+          attribution: `Local upload: ${file.name}`,
         };
         updateSlide(currentSlide.id, { imageUrl, imageSource });
+        toast({ title: "File uploaded", description: "Image added to slide." });
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Export/Import functions
+  // Export functionality
   const exportSlides = () => {
     const data = { title: presentationTitle, slides };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -439,280 +450,221 @@ export default function SlideMaker() {
 
   const importSlides = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-        if (data.slides && Array.isArray(data.slides)) {
-          setSlides(data.slides);
-          setPresentationTitle(data.title || "Imported Presentation");
-          setCurrentSlideIndex(0);
-          toast({ title: "Import successful", description: "Presentation imported successfully." });
-        } else {
-          throw new Error("Invalid format");
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target?.result as string);
+          if (data.slides && Array.isArray(data.slides)) {
+            setSlides(data.slides);
+            setPresentationTitle(data.title || "Imported Presentation");
+            setCurrentSlideIndex(0);
+            toast({ title: "Import successful", description: "Slides imported successfully." });
+          }
+        } catch (error) {
+          toast({ title: "Import failed", description: "Invalid JSON file.", variant: "destructive" });
         }
-      } catch (error) {
-        toast({ title: "Import error", description: "Invalid JSON file.", variant: "destructive" });
-      }
-    };
-    reader.readAsText(file);
+      };
+      reader.readAsText(file);
+    }
   };
 
   const exportHTML = () => {
-    const fontStacksCSS = Object.entries(FONT_STACKS)
-      .map(([key, stack]) => `.font-${key} { font-family: ${stack}; }`)
-      .join('\n        ');
-
-    const slidesHTML = slides.map((slide, index) => {
-      // Use sections if available, otherwise legacy content
-      const useSections = slide.sections && slide.sections.length > 0;
-      
-      let contentHTML = '';
-      
-      if (useSections) {
-        contentHTML = slide.sections!.map(section => {
-          const left = Math.min(section.xStart, section.xEnd);
-          const width = Math.max(section.xStart, section.xEnd) - left;
-          const top = Math.min(section.yStart, section.yEnd);
-          const height = Math.max(section.yStart, section.yEnd) - top;
-          const fontSizePx = Math.round(section.fontSize * 16);
-          
-          const getAnimationClass = (transition: TransitionType | undefined) => {
-            switch (transition) {
-              case 'fade': return 'animate-fadeIn';
-              case 'slide': return 'animate-slideInLeft';
-              case 'zoom': return 'animate-zoomIn';
-              case 'bounce': return 'animate-bounceIn';
-              case 'flip': return 'animate-flipInX';
-              case 'rotate': return 'animate-rotateIn';
-              default: return '';
-            }
-          };
-          
-          const animationClass = getAnimationClass(section.transition);
-          const animationDelay = section.transitionDelay ? `animation-delay: ${section.transitionDelay}s;` : '';
-          
-          const headingHTML = section.heading 
-            ? `<h3 style="margin: 0 0 0.5rem 0; font-size: ${fontSizePx + 4}px; color: ${section.color};">${section.heading}</h3>`
-            : '';
-          
-          return `
-            <section class="sec ${animationClass}" style="position:absolute; left:${left}%; width:${width}%; top:${top}%; height:${height}%; color:${section.color}; text-align:${section.align}; font-family:${FONT_STACKS[section.fontFamily]}; ${animationDelay}">
-              ${headingHTML}
-              <div style="font-size:${fontSizePx}px; line-height:1.45; word-break:break-word; white-space: pre-line;">${section.text}</div>
-            </section>`;
-        }).join('');
-      } else {
-        // Legacy rendering
-        const alignClass = slide.textAlign === 'left' ? 'text-left' : slide.textAlign === 'right' ? 'text-right' : 'text-center';
-        contentHTML = `
-          <div class="relative z-10 px-8 max-w-4xl ${alignClass}">
-            <h1 class="font-bold mb-6 text-white drop-shadow-lg text-5xl">${slide.title}</h1>
-            <p class="text-xl leading-relaxed text-white drop-shadow whitespace-pre-line">${slide.content}</p>
-          </div>`;
-      }
-
-      const getOverlayAnimationClass = (transition: TransitionType | undefined) => {
-        switch (transition) {
-          case 'fade': return 'animate-fadeIn';
-          case 'slide': return 'animate-slideInLeft';
-          case 'zoom': return 'animate-zoomIn';
-          case 'bounce': return 'animate-bounceIn';
-          case 'flip': return 'animate-flipInX';
-          case 'rotate': return 'animate-rotateIn';
-          default: return '';
-        }
-      };
-      
-      const overlayAnimationClass = getOverlayAnimationClass(slide.overlayTransition);
-      
-      const overlayHTML = slide.overlayType === 'horizontal' ? `
-        <div class="${overlayAnimationClass}" style="position: absolute; inset: 0; background: ${hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5)}; top: 30%; bottom: 30%;"></div>
-      ` : slide.overlayType === 'sides' ? `
-        <div class="${overlayAnimationClass}" style="position: absolute; inset: 0; background: linear-gradient(90deg, ${hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5)} 0%, transparent 33.33%, transparent 66.66%, ${hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5)} 100%);"></div>
-      ` : '';
-
-      return `
-        <div class="slide" style="
-          width: 100vw; height: 100vh; position: relative; display: flex; align-items: center; justify-content: center;
-          background: ${slide.imageUrl ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${slide.imageUrl}')` : slide.backgroundColor || '#3B82F6'};
-          background-size: cover; background-position: center;
-        ">
-          ${overlayHTML}
-          ${contentHTML}
-        </div>`;
-    }).join('');
-
-    // Generate citations page
-    const citations = generateCitations();
-    const citationsPage = citations.length > 0 ? `
-      <div class="slide citations" style="
-        width: 100vw; height: 100vh; position: relative; display: flex; align-items: flex-start; justify-content: center;
-        background: #f8f9fa; padding: 60px 40px; box-sizing: border-box;
-      ">
-        <div style="max-width: 800px; width: 100%;">
-          <h1 style="color: #2c3e50; margin-bottom: 40px; font-size: 2.5rem; text-align: center;">Image Sources & Attribution</h1>
-          <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            ${citations.map(citation => `<p style="margin: 15px 0; line-height: 1.6; color: #2c3e50; font-size: 1.1rem;">${citation}</p>`).join('')}
-          </div>
-          <p style="text-align: center; margin-top: 30px; color: #666; font-style: italic;">All images used in this presentation are properly attributed according to their respective licenses.</p>
+    const citations = generateMLACitations();
+    const citationsHtml = citations.length > 0 ? `
+      <div class="citations-page">
+        <h2>Image Citations</h2>
+        <div class="citations-list">
+          ${citations.map(citation => `<p>${citation}</p>`).join('')}
         </div>
-      </div>` : '';
+      </div>
+    ` : '';
 
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${presentationTitle}</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, sans-serif;
-      overflow: hidden;
-    }
-    .slide {
-      display: flex;
-      opacity: 0;
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      transition: opacity 0.8s ease-in-out, transform 0.8s ease;
-      transform: translateX(100%);
-      pointer-events: none;
-      z-index: 0;
-    }
-    .slide.active {
-      opacity: 1;
-      transform: translateX(0);
-      pointer-events: auto;
-      z-index: 1;
-    }
-    .slide.prev {
-      transform: translateX(-100%);
-    }
-    ${fontStacksCSS}
-    .text-left { text-align: left; }
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    
-    /* Animation CSS */
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    
-    @keyframes slideInLeft {
-      from { transform: translateX(-100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-    
-    @keyframes zoomIn {
-      from { transform: scale(0); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-    
-    @keyframes bounceIn {
-      0% { transform: scale(0.3); opacity: 0; }
-      50% { transform: scale(1.05); opacity: 0.8; }
-      70% { transform: scale(0.9); opacity: 0.9; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    
-    @keyframes flipInX {
-      from { transform: perspective(400px) rotateX(90deg); opacity: 0; }
-      40% { transform: perspective(400px) rotateX(-20deg); }
-      60% { transform: perspective(400px) rotateX(10deg); opacity: 1; }
-      80% { transform: perspective(400px) rotateX(-5deg); }
-      to { transform: perspective(400px) rotateX(0deg); opacity: 1; }
-    }
-    
-    @keyframes rotateIn {
-      from { transform: rotate(-200deg); opacity: 0; }
-      to { transform: rotate(0deg); opacity: 1; }
-    }
-    
-    .animate-fadeIn {
-      animation: fadeIn 1s ease-out forwards;
-    }
-    
-    .animate-slideInLeft {
-      animation: slideInLeft 1s ease-out forwards;
-    }
-    
-    .animate-zoomIn {
-      animation: zoomIn 0.8s ease-out forwards;
-    }
-    
-    .animate-bounceIn {
-      animation: bounceIn 1.2s ease-out forwards;
-    }
-    
-    .animate-flipInX {
-      animation: flipInX 1s ease-out forwards;
-    }
-    
-    .animate-rotateIn {
-      animation: rotateIn 1s ease-out forwards;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${presentationTitle}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: ${FONT_STACKS.system}; overflow: hidden; }
+        .slideshow { width: 100vw; height: 100vh; position: relative; }
+        .slide { 
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0; 
+            display: flex; align-items: center; justify-content: center;
+            background-size: cover; background-position: center;
+            opacity: 0; transition: opacity 0.5s ease-in-out;
+        }
+        .slide.active { opacity: 1; }
+        .slide-content { 
+            position: relative; z-index: 10; padding: 2rem; 
+            max-width: 80%; text-align: center; color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+        .section { position: absolute; }
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .navigation { 
+            position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+            display: flex; gap: 10px;
+        }
+        .nav-btn { 
+            padding: 10px 15px; background: rgba(0,0,0,0.7); color: white; 
+            border: none; border-radius: 5px; cursor: pointer;
+        }
+        .slide-counter { 
+            position: fixed; bottom: 20px; left: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px;
+        }
+        .citations-page {
+            padding: 2rem; background: white; color: black; 
+            display: none; width: 100vw; height: 100vh; overflow-y: auto;
+        }
+        .citations-page h2 { margin-bottom: 1rem; }
+        .citations-page p { margin-bottom: 0.5rem; }
+        
+        /* Animation classes */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+        @keyframes zoomIn { from { transform: scale(0); } to { transform: scale(1); } }
+        @keyframes bounceIn { 
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-fadeIn { animation: fadeIn 1s ease-in-out; }
+        .animate-slideInLeft { animation: slideInLeft 1s ease-out; }
+        .animate-zoomIn { animation: zoomIn 0.8s ease-out; }
+        .animate-bounceIn { animation: bounceIn 1s ease-out; }
+    </style>
 </head>
 <body>
-  ${slidesHTML}
-  ${citationsPage}
-  
-  <div style="position: fixed; bottom: 20px; left: 20px; z-index: 1000; color: white; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 14px;">
-    <span id="slideNumber">1</span> / <span id="totalSlides">${slides.length + (citations.length > 0 ? 1 : 0)}</span>
-  </div>
-  
-  <script>
-    let currentSlide = 0;
-    const slides = document.querySelectorAll('.slide');
-    const slideNumber = document.getElementById('slideNumber');
-    const totalSlides = document.getElementById('totalSlides');
+    <div class="slideshow">
+        ${slides.map((slide, index) => {
+          const useSections = slide.sections && slide.sections.length > 0;
+          return `
+            <div class="slide ${index === 0 ? 'active' : ''}" style="
+                background: ${slide.imageUrl 
+                  ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${slide.imageUrl}')`
+                  : slide.backgroundColor || '#3B82F6'};
+                background-size: cover;
+                background-position: center;
+            ">
+                ${slide.overlayType === 'horizontal' ? `
+                    <div class="overlay" style="
+                        background: ${hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5)};
+                        top: 30%; bottom: 30%;
+                    "></div>
+                ` : ''}
+                
+                ${slide.overlayType === 'sides' ? `
+                    <div class="overlay" style="
+                        background: linear-gradient(90deg, 
+                            ${hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5)} 0%, 
+                            transparent 33.33%, 
+                            transparent 66.66%, 
+                            ${hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5)} 100%);
+                    "></div>
+                ` : ''}
+                
+                ${useSections ? slide.sections!.map(section => `
+                    <div class="section" style="
+                        left: ${Math.min(section.xStart, section.xEnd)}%;
+                        width: ${Math.max(section.xStart, section.xEnd) - Math.min(section.xStart, section.xEnd)}%;
+                        top: ${Math.min(section.yStart, section.yEnd)}%;
+                        height: ${Math.max(section.yStart, section.yEnd) - Math.min(section.yStart, section.yEnd)}%;
+                        color: ${section.color};
+                        text-align: ${section.align};
+                        font-family: ${FONT_STACKS[section.fontFamily]};
+                        animation-delay: ${section.transitionDelay || 0}s;
+                    " class="${section.transition ? `animate-${section.transition === 'fade' ? 'fadeIn' : section.transition === 'slide' ? 'slideInLeft' : section.transition === 'zoom' ? 'zoomIn' : section.transition === 'bounce' ? 'bounceIn' : ''}` : ''}">
+                        ${section.heading ? `<h3 style="margin-bottom: 0.5rem; font-size: ${(section.fontSize + 0.3) * 1.5}px; font-weight: bold;">${section.heading}</h3>` : ''}
+                        <div style="font-size: ${section.fontSize * 1.5}px; line-height: 1.45; white-space: pre-line;">${section.text}</div>
+                    </div>
+                `).join('') : `
+                    <div class="slide-content" style="
+                        text-align: ${slide.textAlign || 'center'};
+                        color: ${slide.textColor || '#ffffff'};
+                    ">
+                        <h1 style="font-size: ${(slide.titleSize || 3.5) * 16}px; margin-bottom: 1.5rem;">${slide.title}</h1>
+                        <p style="font-size: ${(slide.bodySize || 1.4) * 16}px; white-space: pre-line;">${slide.content}</p>
+                    </div>
+                `}
+            </div>
+          `;
+        }).join('')}
+    </div>
     
-    function showSlide(n) {
-      const prevSlide = currentSlide;
-      
-      slides.forEach((slide, i) => {
-        slide.classList.remove('active', 'prev');
-        if (i === n) {
-          slide.classList.add('active');
-        } else if (i === prevSlide && i < n) {
-          slide.classList.add('prev');
-        }
-      });
-      
-      if (slides[n]) {
-        slideNumber.textContent = n + 1;
+    ${citationsHtml}
+    
+    <div class="slide-counter">
+        <span id="current-slide">1</span> / <span id="total-slides">${slides.length}</span>
+    </div>
+    
+    <div class="navigation">
+        <button class="nav-btn" onclick="prevSlide()">← Previous</button>
+        <button class="nav-btn" onclick="nextSlide()">Next →</button>
+        <button class="nav-btn" onclick="toggleCitations()">Citations</button>
+    </div>
+    
+    <script>
+        let currentSlide = 0;
+        const totalSlides = ${slides.length};
+        const showingCitations = false;
         
-        // Special styling for citations page
-        if (slides[n].classList.contains('citations')) {
-          document.body.style.overflow = 'auto';
-        } else {
-          document.body.style.overflow = 'hidden';
+        function showSlide(index) {
+            document.querySelectorAll('.slide').forEach((slide, i) => {
+                slide.classList.toggle('active', i === index);
+            });
+            document.getElementById('current-slide').textContent = index + 1;
         }
-      }
-    }
-    
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft' && currentSlide > 0) {
-        currentSlide--;
-        showSlide(currentSlide);
-      } else if ((e.key === 'ArrowRight' || e.key === ' ') && currentSlide < slides.length - 1) {
-        currentSlide++;
-        showSlide(currentSlide);
-        e.preventDefault();
-      }
-    });
-    
-    // Initialize first slide
-    setTimeout(() => showSlide(0), 100);
-  </script>
+        
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                currentSlide++;
+                showSlide(currentSlide);
+            }
+        }
+        
+        function prevSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                showSlide(currentSlide);
+            }
+        }
+        
+        function toggleCitations() {
+            const slideshow = document.querySelector('.slideshow');
+            const citations = document.querySelector('.citations-page');
+            const nav = document.querySelector('.navigation');
+            const counter = document.querySelector('.slide-counter');
+            
+            if (citations.style.display === 'block') {
+                citations.style.display = 'none';
+                slideshow.style.display = 'block';
+                nav.style.display = 'flex';
+                counter.style.display = 'block';
+            } else {
+                citations.style.display = 'block';
+                slideshow.style.display = 'none';
+                nav.style.display = 'none';
+                counter.style.display = 'none';
+            }
+        }
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 'c' || e.key === 'C') {
+                toggleCitations();
+            }
+        });
+    </script>
 </body>
 </html>`;
 
@@ -744,11 +696,14 @@ export default function SlideMaker() {
       <div className="space-y-2">
         <Label>Horizontal Position (Left → Right)</Label>
         <div className="relative">
+          {/* Track */}
           <div className="h-6 bg-gray-200 rounded relative">
+            {/* Active span */}
             <div 
               className="absolute top-0 h-6 bg-blue-500 rounded"
               style={{ left: `${left}%`, width: `${width}%` }}
             />
+            {/* Start handle */}
             <input
               type="range"
               min="0"
@@ -758,6 +713,7 @@ export default function SlideMaker() {
               className="absolute top-0 w-full h-6 opacity-0 cursor-pointer"
               style={{ zIndex: 2 }}
             />
+            {/* End handle */}
             <input
               type="range"
               min="1"
@@ -767,6 +723,7 @@ export default function SlideMaker() {
               className="absolute top-0 w-full h-6 opacity-0 cursor-pointer"
               style={{ zIndex: 1 }}
             />
+            {/* Handle indicators */}
             <div 
               className="absolute top-1 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"
               style={{ left: `calc(${section.xStart}% - 8px)` }}
@@ -803,11 +760,14 @@ export default function SlideMaker() {
       <div className="space-y-2">
         <Label>Vertical Position (Top → Bottom)</Label>
         <div className="relative">
+          {/* Track - vertical orientation */}
           <div className="w-6 h-24 bg-gray-200 rounded relative mx-auto">
+            {/* Active span */}
             <div 
               className="absolute left-0 w-6 bg-green-500 rounded"
               style={{ top: `${top}%`, height: `${height}%` }}
             />
+            {/* Start handle (top) */}
             <input
               type="range"
               min="0"
@@ -817,6 +777,7 @@ export default function SlideMaker() {
               className="absolute left-0 w-6 h-24 opacity-0 cursor-pointer"
               style={{ zIndex: 2, transform: 'rotate(90deg)', transformOrigin: 'left top', width: '96px', left: '24px', top: '0px' }}
             />
+            {/* End handle (bottom) */}
             <input
               type="range"
               min="1"
@@ -826,6 +787,7 @@ export default function SlideMaker() {
               className="absolute left-0 w-6 h-24 opacity-0 cursor-pointer"
               style={{ zIndex: 1, transform: 'rotate(90deg)', transformOrigin: 'left top', width: '96px', left: '24px', top: '0px' }}
             />
+            {/* Handle indicators */}
             <div 
               className="absolute left-1 w-4 h-4 bg-white border-2 border-green-500 rounded-full"
               style={{ top: `calc(${section.yStart}% - 8px)` }}
@@ -843,266 +805,345 @@ export default function SlideMaker() {
     );
   };
 
+  // Reset section index when changing slides
+  useEffect(() => {
+    setCurrentSectionIndex(0);
+  }, [currentSlideIndex]);
+
+  // Preview mode navigation
+  useEffect(() => {
+    if (!isPreviewMode) return;
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      const currentSlideData = slides[currentSlideIndex];
+      const sectionsCount = currentSlideData?.sections?.length || 0;
+      
+      if (e.key === 'ArrowLeft' && currentSlideIndex > 0) {
+        setCurrentSlideIndex(currentSlideIndex - 1);
+      } else if ((e.key === 'ArrowRight' || e.key === ' ') && currentSlideIndex < slides.length - 1) {
+        setCurrentSlideIndex(currentSlideIndex + 1);
+        e.preventDefault();
+      } else if (e.key === 'ArrowUp' && sectionsCount > 0 && currentSectionIndex > 0) {
+        setCurrentSectionIndex(currentSectionIndex - 1);
+        e.preventDefault();
+      } else if (e.key === 'ArrowDown' && sectionsCount > 0 && currentSectionIndex < sectionsCount - 1) {
+        setCurrentSectionIndex(currentSectionIndex + 1);
+        e.preventDefault();
+      } else if (e.key === 'Escape') {
+        setIsPreviewMode(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isPreviewMode, currentSlideIndex, currentSectionIndex, slides.length, slides]);
+
+  // Render section content for preview
+  const renderSection = (section: SlideSection, isPreview = false, isHighlighted = false) => {
+    const left = Math.min(section.xStart, section.xEnd);
+    const width = Math.max(section.xStart, section.xEnd) - left;
+    const top = Math.min(section.yStart, section.yEnd);
+    const height = Math.max(section.yStart, section.yEnd) - top;
+    const fontSizeRem = isPreview ? section.fontSize * 1.5 : section.fontSize;
+    
+    // Generate transition CSS class
+    const getTransitionClass = (transition: TransitionType | undefined) => {
+      switch (transition) {
+        case 'fade': return 'animate-fadeIn';
+        case 'slide': return 'animate-slideInLeft';
+        case 'zoom': return 'animate-zoomIn';
+        case 'bounce': return 'animate-bounceIn';
+        case 'flip': return 'animate-flipInX';
+        case 'rotate': return 'animate-rotateIn';
+        default: return '';
+      }
+    };
+    
+    return (
+      <div
+        key={section.id}
+        className={`absolute ${getTransitionClass(section.transition)} ${
+          isHighlighted && isPreview ? 'ring-2 ring-yellow-400 ring-opacity-80' : ''
+        }`}
+        style={{
+          left: `${left}%`,
+          width: `${width}%`,
+          top: `${top}%`,
+          height: `${height}%`,
+          color: section.color,
+          textAlign: section.align,
+          fontFamily: FONT_STACKS[section.fontFamily],
+          animationDelay: `${section.transitionDelay || 0}s`,
+          backgroundColor: isHighlighted && isPreview ? 'rgba(255, 255, 0, 0.1)' : 'transparent',
+          borderRadius: isHighlighted && isPreview ? '8px' : '0',
+          boxShadow: isHighlighted && isPreview ? '0 0 20px rgba(255, 255, 0, 0.3)' : 'none',
+        }}
+      >
+        {section.heading && (
+          <h3 style={{
+            margin: '0 0 0.5rem 0',
+            fontSize: `${fontSizeRem + 0.3}rem`,
+            fontWeight: 'bold',
+            color: section.color,
+          }}>
+            {section.heading}
+          </h3>
+        )}
+        <div style={{
+          fontSize: `${fontSizeRem}rem`,
+          lineHeight: '1.45',
+          wordBreak: 'break-word',
+          whiteSpace: 'pre-line',
+        }}>
+          {section.text}
+        </div>
+      </div>
+    );
+  };
+
   if (isPreviewMode) {
+    const slide = slides[currentSlideIndex];
+    const useSections = slide?.sections && slide.sections.length > 0;
+
     return (
       <div className="fixed inset-0 bg-black z-50">
-        <div className="absolute top-4 right-4 z-50">
-          <Button
-            onClick={() => setIsPreviewMode(false)}
-            variant="secondary"
-            size="sm"
-            data-testid="exit-preview"
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            Exit Preview
-          </Button>
-        </div>
-        
-        <div className="absolute bottom-4 left-4 z-50 text-white bg-black/70 px-3 py-2 rounded">
-          <span>{currentSlideIndex + 1}</span> / <span>{slides.length}</span>
-        </div>
-        
-        <div className="absolute bottom-4 right-4 z-50 space-x-2">
-          <Button
-            onClick={() => setCurrentSlideIndex(Math.max(0, currentSlideIndex - 1))}
-            disabled={currentSlideIndex === 0}
-            variant="secondary"
-            size="sm"
-            data-testid="prev-slide"
-          >
-            ←
-          </Button>
-          <Button
-            onClick={() => setCurrentSlideIndex(Math.min(slides.length - 1, currentSlideIndex + 1))}
-            disabled={currentSlideIndex === slides.length - 1}
-            variant="secondary"
-            size="sm"
-            data-testid="next-slide"
-          >
-            →
-          </Button>
-        </div>
-        
         <div 
-          className="w-full h-full flex items-center justify-center relative"
+          className="w-full h-full relative flex items-center justify-center"
           style={{
-            background: currentSlide?.imageUrl 
-              ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${currentSlide.imageUrl}')` 
-              : currentSlide?.backgroundColor || '#3B82F6',
+            background: slide?.imageUrl 
+              ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${slide.imageUrl}')` 
+              : slide?.backgroundColor || '#3B82F6',
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
         >
           {/* Overlays */}
-          {currentSlide?.overlayType === 'horizontal' && (
+          {slide?.overlayType === 'horizontal' && (
             <div 
               className="absolute inset-0"
               style={{
-                background: hexWithOpacity(currentSlide.overlayColor || '#000000', currentSlide.overlayOpacity || 0.5),
+                background: hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5),
                 top: '30%',
                 bottom: '30%'
               }}
             />
           )}
           
-          {currentSlide?.overlayType === 'sides' && (
+          {slide?.overlayType === 'sides' && (
             <div 
               className="absolute inset-0"
               style={{
-                background: `linear-gradient(90deg, ${hexWithOpacity(currentSlide.overlayColor || '#000000', currentSlide.overlayOpacity || 0.5)} 0%, transparent 33.33%, transparent 66.66%, ${hexWithOpacity(currentSlide.overlayColor || '#000000', currentSlide.overlayOpacity || 0.5)} 100%)`
+                background: `linear-gradient(90deg, 
+                  ${hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5)} 0%, 
+                  transparent 33.33%, 
+                  transparent 66.66%, 
+                  ${hexWithOpacity(slide.overlayColor || '#000000', slide.overlayOpacity || 0.5)} 100%)`
               }}
             />
           )}
           
-          {/* Content - Sections or Legacy */}
-          {currentSlide?.sections && currentSlide.sections.length > 0 ? (
-            currentSlide.sections.map(section => {
-              const left = Math.min(section.xStart, section.xEnd);
-              const width = Math.max(section.xStart, section.xEnd) - left;
-              const top = Math.min(section.yStart, section.yEnd);
-              const height = Math.max(section.yStart, section.yEnd) - top;
-              
-              return (
-                <div 
-                  key={section.id}
-                  className="absolute"
-                  style={{
-                    left: `${left}%`,
-                    width: `${width}%`,
-                    top: `${top}%`,
-                    height: `${height}%`,
-                    color: section.color,
-                    textAlign: section.align,
-                    fontFamily: FONT_STACKS[section.fontFamily],
-                    fontSize: `${section.fontSize}rem`,
-                    lineHeight: '1.45'
-                  }}
-                >
-                  {section.heading && (
-                    <h3 style={{ margin: '0 0 0.5rem 0', fontSize: `${section.fontSize + 0.3}rem` }}>
-                      {section.heading}
-                    </h3>
-                  )}
-                  <div style={{ whiteSpace: 'pre-line' }}>
-                    {section.text}
-                  </div>
-                </div>
-              );
-            })
+          {/* Content */}
+          {useSections ? (
+            slide.sections!.map((section, index) => renderSection(section, true, index === currentSectionIndex))
           ) : (
-            <div className={`relative z-10 px-8 max-w-4xl text-${currentSlide?.textAlign || 'center'}`}>
-              <h1 className="font-bold mb-6 text-white drop-shadow-lg" style={{ fontSize: `${currentSlide?.titleSize || 3.5}rem` }}>
-                {currentSlide?.title}
+            <div className={`relative z-10 px-8 max-w-4xl ${
+              slide?.textAlign === 'left' ? 'text-left' : 
+              slide?.textAlign === 'right' ? 'text-right' : 'text-center'
+            }`}>
+              <h1 className="font-bold mb-6 text-white drop-shadow-lg text-5xl">
+                {slide?.title}
               </h1>
-              <p className="leading-relaxed text-white drop-shadow whitespace-pre-line" style={{ fontSize: `${currentSlide?.bodySize || 1.4}rem` }}>
-                {currentSlide?.content}
+              <p className="text-xl leading-relaxed text-white drop-shadow whitespace-pre-line">
+                {slide?.content}
               </p>
             </div>
           )}
+        </div>
+        
+        {/* Navigation */}
+        <div className="fixed bottom-6 left-6 text-white bg-black bg-opacity-70 px-4 py-2 rounded-lg text-sm">
+          {currentSlideIndex + 1} / {slides.length}
+          {useSections && slide.sections!.length > 0 && (
+            <div className="text-xs mt-1 opacity-80">
+              Section: {currentSectionIndex + 1} / {slide.sections!.length}
+            </div>
+          )}
+        </div>
+        
+        <div className="fixed bottom-6 right-6 flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentSlideIndex(Math.max(0, currentSlideIndex - 1))}
+            disabled={currentSlideIndex === 0}
+            className="bg-black bg-opacity-70 text-white hover:bg-opacity-90"
+            data-testid="preview-prev-button"
+          >
+            ←
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentSlideIndex(Math.min(slides.length - 1, currentSlideIndex + 1))}
+            disabled={currentSlideIndex === slides.length - 1}
+            className="bg-black bg-opacity-70 text-white hover:bg-opacity-90"
+            data-testid="preview-next-button"
+          >
+            →
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setIsPreviewMode(false)}
+            className="bg-black bg-opacity-70 text-white hover:bg-opacity-90"
+            data-testid="preview-exit-button"
+          >
+            Exit Preview
+          </Button>
+        </div>
+        
+        <div className="fixed top-6 right-6 text-white bg-black bg-opacity-70 px-3 py-2 rounded text-sm">
+          ← → Space: slides • ↑ ↓: sections • Esc: exit
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Input
-              value={presentationTitle}
-              onChange={(e) => setPresentationTitle(e.target.value)}
-              className="text-xl font-bold max-w-md"
-              data-testid="presentation-title"
-            />
+            <Monitor className="h-6 w-6 text-blue-600" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Slide Generator</h1>
+              <Input
+                value={presentationTitle}
+                onChange={(e) => setPresentationTitle(e.target.value)}
+                className="mt-1 w-64 text-sm"
+                placeholder="Presentation name"
+                data-testid="presentation-title-input"
+              />
+            </div>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <Button
-              onClick={() => setIsPreviewMode(true)}
-              variant="default"
-              size="sm"
-              data-testid="preview-button"
-            >
-              <Monitor className="h-4 w-4 mr-2" />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setIsPreviewMode(true)} data-testid="preview-button">
+              <Eye className="h-4 w-4 mr-2" />
               Preview
             </Button>
             
-            <Button
-              onClick={exportHTML}
-              variant="outline"
-              size="sm"
-              data-testid="export-html-button"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export HTML
-            </Button>
-            
-            <Button
-              onClick={exportSlides}
-              variant="outline"
-              size="sm"
-              data-testid="export-json-button"
-            >
-              <FileDown className="h-4 w-4 mr-2" />
-              Export JSON
-            </Button>
-            
-            <label htmlFor="import-file" className="cursor-pointer">
-              <div className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3 cursor-pointer" data-testid="import-button">
-                <FileUp className="h-4 w-4 mr-2" />
-                Import JSON
-              </div>
-            </label>
-            <input
-              id="import-file"
-              type="file"
-              accept=".json"
-              onChange={importSlides}
-              className="hidden"
-            />
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" data-testid="import-export-button">
+                  <FileUp className="h-4 w-4 mr-2" />
+                  Import/Export
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Import/Export</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Button onClick={exportSlides} className="w-full" data-testid="export-json-button">
+                      <Download className="h-4 w-4 mr-2" />
+                      Export JSON
+                    </Button>
+                  </div>
+                  <div>
+                    <Button onClick={exportHTML} className="w-full" data-testid="export-html-button">
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Export HTML
+                    </Button>
+                  </div>
+                  <div>
+                    <Input
+                      type="file"
+                      accept=".json"
+                      onChange={importSlides}
+                      className="w-full"
+                      data-testid="import-json-input"
+                    />
+                    <Label className="text-sm text-gray-600 mt-1">Import JSON</Label>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          
           {/* Slide List */}
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Slides ({slides.length})</CardTitle>
-                  <Button
-                    onClick={addSlide}
-                    size="sm"
-                    data-testid="add-slide-button"
-                  >
+                <CardTitle className="flex items-center justify-between">
+                  <span>Slides</span>
+                  <Button onClick={addSlide} size="sm" data-testid="add-slide-button">
                     <Plus className="h-4 w-4" />
                   </Button>
-                </div>
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+              <CardContent className="p-0">
+                <div className="space-y-2 p-4">
                   {slides.map((slide, index) => (
                     <div
                       key={slide.id}
-                      className={`p-3 border rounded cursor-pointer transition-colors ${
-                        currentSlideIndex === index ? 'bg-primary/10 border-primary' : 'hover:bg-muted'
+                      className={`p-3 border rounded cursor-pointer ${
+                        index === currentSlideIndex ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
                       }`}
                       onClick={() => setCurrentSlideIndex(index)}
                       data-testid={`slide-item-${index}`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{slide.title}</p>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {slide.sections && slide.sections.length > 0 
-                              ? `${slide.sections.length} sections` 
-                              : slide.content.substring(0, 50)
-                            }
-                          </p>
-                        </div>
-                        
-                        <div className="flex items-center space-x-1 ml-2">
+                        <span className="text-sm font-medium">{index + 1}. {slide.title}</span>
+                        <div className="flex gap-1">
                           <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={(e) => {
                               e.stopPropagation();
-                              moveSlide(slide.id, "up");
+                              moveSlide(slide.id, 'up');
                             }}
                             disabled={index === 0}
-                            variant="ghost"
-                            size="sm"
-                            data-testid={`move-up-${index}`}
+                            data-testid={`move-slide-up-${index}`}
                           >
                             <ArrowUp className="h-3 w-3" />
                           </Button>
-                          
                           <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={(e) => {
                               e.stopPropagation();
-                              moveSlide(slide.id, "down");
+                              moveSlide(slide.id, 'down');
                             }}
                             disabled={index === slides.length - 1}
-                            variant="ghost"
-                            size="sm"
-                            data-testid={`move-down-${index}`}
+                            data-testid={`move-slide-down-${index}`}
                           >
                             <ArrowDown className="h-3 w-3" />
                           </Button>
-                          
                           <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteSlide(slide.id);
                             }}
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
                             data-testid={`delete-slide-${index}`}
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {slide.sections && slide.sections.length > 0 
+                          ? `${slide.sections.length} section(s)`
+                          : 'Legacy mode'
+                        }
                       </div>
                     </div>
                   ))}
@@ -1112,12 +1153,13 @@ export default function SlideMaker() {
           </div>
 
           {/* Editor */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <CardTitle>Edit Slide</CardTitle>
+                <CardTitle>Editing - Slide {currentSlideIndex + 1}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
+                
                 {/* Basic slide properties */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1133,9 +1175,9 @@ export default function SlideMaker() {
                     <Label htmlFor="slide-type">Type</Label>
                     <select
                       id="slide-type"
-                      className="w-full p-2 border border-input rounded-md"
                       value={currentSlide?.type || 'content'}
                       onChange={(e) => updateSlide(currentSlide.id, { type: e.target.value as SlideType })}
+                      className="w-full p-2 border border-gray-300 rounded-md"
                       data-testid="slide-type-select"
                     >
                       <option value="title">Title</option>
@@ -1145,7 +1187,7 @@ export default function SlideMaker() {
                   </div>
                 </div>
 
-                {/* Legacy content */}
+                {/* Legacy content (backward compatibility) */}
                 <div>
                   <Label htmlFor="slide-content">Legacy Content (shown if no sections)</Label>
                   <Textarea
@@ -1199,11 +1241,12 @@ export default function SlideMaker() {
                           Search Images
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-6xl max-h-[90vh]">
+                      <DialogContent className="max-w-4xl max-h-[80vh]">
                         <DialogHeader>
                           <DialogTitle>Search Creative Commons Images</DialogTitle>
                         </DialogHeader>
-                        <div className="space-y-6">
+                        <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+                          
                           {/* Commercial Use Info */}
                           <CommercialUseInfo />
                           
@@ -1218,18 +1261,27 @@ export default function SlideMaker() {
                           {/* Search Input */}
                           <div className="flex gap-2">
                             <Input
-                              placeholder="Search for images..."
+                              placeholder="Search for images (e.g., nature, technology, education)"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
-                              onKeyPress={(e) => e.key === 'Enter' && setSearchQuery(searchQuery)}
+                              className="flex-1"
                               data-testid="image-search-input"
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  // The query will automatically trigger due to useQuery
+                                }
+                              }}
                             />
                             <Button 
-                              onClick={() => setSearchQuery(searchQuery)} 
-                              disabled={searching}
+                              onClick={() => {
+                                // Force refresh by slightly changing the query
+                                setSearchQuery(prev => prev + ' ');
+                                setSearchQuery(prev => prev.trim());
+                              }}
+                              disabled={!searchQuery.trim() || searching}
                               data-testid="search-submit-button"
                             >
-                              <Search className="h-4 w-4" />
+                              {searching ? 'Searching...' : 'Search'}
                             </Button>
                           </div>
                           
@@ -1247,239 +1299,203 @@ export default function SlideMaker() {
                       </DialogContent>
                     </Dialog>
                     
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      data-testid="upload-image-button"
-                    >
+                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} data-testid="upload-image-button">
                       <Upload className="h-4 w-4 mr-2" />
                       Upload
                     </Button>
-                    
                     <input
-                      type="file"
                       ref={fileInputRef}
-                      onChange={handleFileUpload}
+                      type="file"
                       accept="image/*"
+                      onChange={handleFileUpload}
                       className="hidden"
                     />
+                    
+                    {currentSlide?.imageUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateSlide(currentSlide.id, { imageUrl: '', imageSource: undefined })}
+                        data-testid="remove-image-button"
+                      >
+                        Remove
+                      </Button>
+                    )}
                   </div>
                   
-                  {currentSlide?.imageUrl && (
-                    <div className="mt-2">
-                      <img
-                        src={currentSlide.imageUrl}
-                        alt="Background"
-                        className="w-full h-32 object-cover rounded border"
-                      />
-                      {currentSlide.imageSource && (
-                        <div className="mt-2 p-2 bg-muted rounded text-sm">
-                          <p><strong>Source:</strong> {getSourceDisplayName(currentSlide.imageSource.source)}</p>
-                          <p><strong>Author:</strong> {currentSlide.imageSource.author}</p>
-                          <p><strong>License:</strong> {currentSlide.imageSource.license}</p>
-                          <p><strong>Commercial Use:</strong> {getCommercialUseStatus(currentSlide.imageSource) ? 'Allowed' : 'Check terms'}</p>
-                        </div>
-                      )}
+                  {/* Image attribution display */}
+                  {currentSlide?.imageSource && (
+                    <div className="mt-2 p-3 bg-gray-100 rounded text-sm">
+                      <div className="font-medium">Image Attribution:</div>
+                      <div>Title: {currentSlide.imageSource.title}</div>
+                      <div>Author: {currentSlide.imageSource.author}</div>
+                      <div>Source: {getSourceDisplayName(currentSlide.imageSource.source)}</div>
+                      <div>License: {currentSlide.imageSource.license}</div>
+                      <div>
+                        <a 
+                          href={currentSlide.imageSource.imageUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Source →
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Overlay settings */}
-                <div className="border-t pt-4">
-                  <Label className="text-base font-semibold mb-3 block">Overlay Options</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                      <Label htmlFor="overlay-type">Type</Label>
-                      <select
-                        id="overlay-type"
-                        className="w-full p-2 border border-input rounded-md"
-                        value={currentSlide?.overlayType || 'none'}
-                        onChange={(e) => updateSlide(currentSlide.id, { overlayType: e.target.value as OverlayType })}
-                        data-testid="overlay-type-select"
-                      >
-                        <option value="none">None</option>
-                        <option value="horizontal">Horizontal Band</option>
-                        <option value="sides">Side Borders</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="overlay-color">Color</Label>
-                      <Input
-                        id="overlay-color"
-                        type="color"
-                        value={currentSlide?.overlayColor || '#000000'}
-                        onChange={(e) => updateSlide(currentSlide.id, { overlayColor: e.target.value })}
-                        disabled={currentSlide?.overlayType === 'none'}
-                        data-testid="overlay-color-input"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="overlay-opacity">Opacity ({Math.round((currentSlide?.overlayOpacity || 0.5) * 100)}%)</Label>
-                      <Input
-                        id="overlay-opacity"
-                        type="range"
-                        min="0.1"
-                        max="0.9"
-                        step="0.1"
-                        value={currentSlide?.overlayOpacity || 0.5}
-                        onChange={(e) => updateSlide(currentSlide.id, { overlayOpacity: parseFloat(e.target.value) })}
-                        disabled={currentSlide?.overlayType === 'none'}
-                        data-testid="overlay-opacity-input"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="text-align">Legacy Text Align</Label>
-                      <select
-                        id="text-align"
-                        className="w-full p-2 border border-input rounded-md"
-                        value={currentSlide?.textAlign || 'center'}
-                        onChange={(e) => updateSlide(currentSlide.id, { textAlign: e.target.value as TextAlign })}
-                        data-testid="text-align-select"
-                      >
-                        <option value="left">Left</option>
-                        <option value="center">Center</option>
-                        <option value="right">Right</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sections Editor */}
-                <div className="border-t pt-4">
+                {/* Sections Management */}
+                <div>
                   <div className="flex items-center justify-between mb-4">
-                    <Label className="text-base font-semibold">Text Sections</Label>
-                    <Button
-                      onClick={() => addSection(currentSlide.id)}
-                      size="sm"
-                      variant="outline"
-                      data-testid="add-section-button"
-                    >
+                    <h3 className="text-lg font-semibold">Text Sections</h3>
+                    <Button onClick={() => addSection(currentSlide.id)} size="sm" data-testid="add-section-button">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Section
                     </Button>
                   </div>
                   
-                  <div className="space-y-4">
-                    {(currentSlide?.sections || []).map((section, index) => (
-                      <Card key={section.id} className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-medium">Section {index + 1}</h4>
-                          <Button
-                            onClick={() => deleteSection(currentSlide.id, section.id)}
-                            size="sm"
-                            variant="ghost"
-                            data-testid={`delete-section-${index}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label>Heading (optional)</Label>
-                            <Input
-                              value={section.heading || ''}
-                              onChange={(e) => updateSection(currentSlide.id, section.id, { heading: e.target.value })}
-                              placeholder="Section heading..."
-                              data-testid={`section-heading-${index}`}
-                            />
-                          </div>
-                          <div>
-                            <Label>Font Family</Label>
-                            <select
-                              value={section.fontFamily}
-                              onChange={(e) => updateSection(currentSlide.id, section.id, { fontFamily: e.target.value as FontFamily })}
-                              className="w-full p-2 border border-input rounded-md"
-                              data-testid={`section-font-${index}`}
-                            >
-                              <option value="system">System</option>
-                              <option value="serif">Serif</option>
-                              <option value="mono">Monospace</option>
-                              <option value="display">Display</option>
-                              <option value="hand">Handwriting</option>
-                            </select>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                          <div>
-                            <Label>Font Size (rem)</Label>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              min="0.5"
-                              max="5"
-                              value={section.fontSize}
-                              onChange={(e) => updateSection(currentSlide.id, section.id, { fontSize: parseFloat(e.target.value) || 1.1 })}
-                              data-testid={`section-font-size-${index}`}
-                            />
-                          </div>
-                          <div>
-                            <Label>Color</Label>
-                            <Input
-                              type="color"
-                              value={section.color}
-                              onChange={(e) => updateSection(currentSlide.id, section.id, { color: e.target.value })}
-                              data-testid={`section-color-${index}`}
-                            />
-                          </div>
-                          <div>
-                            <Label>Alignment</Label>
-                            <select
-                              value={section.align}
-                              onChange={(e) => updateSection(currentSlide.id, section.id, { align: e.target.value as TextAlign })}
-                              className="w-full p-2 border border-input rounded-md"
-                              data-testid={`section-align-${index}`}
-                            >
-                              <option value="left">Left</option>
-                              <option value="center">Center</option>
-                              <option value="right">Right</option>
-                            </select>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-4">
-                          <Label>Text</Label>
-                          <Textarea
-                            value={section.text}
-                            onChange={(e) => updateSection(currentSlide.id, section.id, { text: e.target.value })}
-                            rows={3}
-                            placeholder="Section content..."
-                            data-testid={`section-text-${index}`}
-                          />
-                        </div>
-                        
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <XPositionSlider
-                            section={section}
-                            onUpdate={(updates) => updateSection(currentSlide.id, section.id, updates)}
-                          />
-                          <YPositionSlider
-                            section={section}
-                            onUpdate={(updates) => updateSection(currentSlide.id, section.id, updates)}
-                          />
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                  
-                  {(!currentSlide?.sections || currentSlide.sections.length === 0) && (
-                    <div className="text-center py-6 text-muted-foreground">
-                      <Type className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>No sections. Legacy title/content will be displayed.</p>
-                      <Button
-                        onClick={() => addSection(currentSlide.id)}
-                        variant="outline"
-                        className="mt-2"
-                        data-testid="create-first-section-button"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create First Section
-                      </Button>
+                  {currentSlide?.sections && currentSlide.sections.length > 0 ? (
+                    <div className="space-y-4">
+                      {currentSlide.sections.map((section, sectionIndex) => (
+                        <Card key={section.id} className={sectionIndex === currentSectionIndex ? 'border-blue-500' : ''}>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center justify-between">
+                              <span>Section {sectionIndex + 1}</span>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setCurrentSectionIndex(sectionIndex)}
+                                  className={sectionIndex === currentSectionIndex ? 'bg-blue-100' : ''}
+                                  data-testid={`select-section-${sectionIndex}`}
+                                >
+                                  <Eye className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => deleteSection(currentSlide.id, section.id)}
+                                  data-testid={`delete-section-${sectionIndex}`}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            
+                            {/* Text Content */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <Label>Heading (optional)</Label>
+                                <Input
+                                  value={section.heading || ''}
+                                  onChange={(e) => updateSection(currentSlide.id, section.id, { heading: e.target.value })}
+                                  placeholder="Section heading"
+                                  data-testid={`section-heading-${sectionIndex}`}
+                                />
+                              </div>
+                              <div>
+                                <Label>Font Family</Label>
+                                <select
+                                  value={section.fontFamily}
+                                  onChange={(e) => updateSection(currentSlide.id, section.id, { fontFamily: e.target.value as FontFamily })}
+                                  className="w-full p-2 border border-gray-300 rounded-md"
+                                  data-testid={`section-font-${sectionIndex}`}
+                                >
+                                  <option value="system">System</option>
+                                  <option value="serif">Serif</option>
+                                  <option value="mono">Monospace</option>
+                                  <option value="display">Display</option>
+                                  <option value="hand">Handwriting</option>
+                                </select>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label>Text Content</Label>
+                              <Textarea
+                                value={section.text}
+                                onChange={(e) => updateSection(currentSlide.id, section.id, { text: e.target.value })}
+                                rows={3}
+                                placeholder="Section text content"
+                                data-testid={`section-text-${sectionIndex}`}
+                              />
+                            </div>
+                            
+                            {/* Styling */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                              <div>
+                                <Label>Font Size (rem)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  min="0.5"
+                                  max="5"
+                                  value={section.fontSize}
+                                  onChange={(e) => updateSection(currentSlide.id, section.id, { fontSize: parseFloat(e.target.value) })}
+                                  data-testid={`section-font-size-${sectionIndex}`}
+                                />
+                              </div>
+                              <div>
+                                <Label>Text Color</Label>
+                                <Input
+                                  type="color"
+                                  value={section.color}
+                                  onChange={(e) => updateSection(currentSlide.id, section.id, { color: e.target.value })}
+                                  data-testid={`section-color-${sectionIndex}`}
+                                />
+                              </div>
+                              <div>
+                                <Label>Alignment</Label>
+                                <select
+                                  value={section.align}
+                                  onChange={(e) => updateSection(currentSlide.id, section.id, { align: e.target.value as TextAlign })}
+                                  className="w-full p-2 border border-gray-300 rounded-md"
+                                  data-testid={`section-align-${sectionIndex}`}
+                                >
+                                  <option value="left">Left</option>
+                                  <option value="center">Center</option>
+                                  <option value="right">Right</option>
+                                </select>
+                              </div>
+                              <div>
+                                <Label>Transition</Label>
+                                <select
+                                  value={section.transition || 'none'}
+                                  onChange={(e) => updateSection(currentSlide.id, section.id, { transition: e.target.value as TransitionType })}
+                                  className="w-full p-2 border border-gray-300 rounded-md"
+                                  data-testid={`section-transition-${sectionIndex}`}
+                                >
+                                  <option value="none">None</option>
+                                  <option value="fade">Fade</option>
+                                  <option value="slide">Slide</option>
+                                  <option value="zoom">Zoom</option>
+                                  <option value="bounce">Bounce</option>
+                                </select>
+                              </div>
+                            </div>
+                            
+                            {/* Positioning */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <XPositionSlider 
+                                section={section}
+                                onUpdate={(updates) => updateSection(currentSlide.id, section.id, updates)}
+                              />
+                              <YPositionSlider 
+                                section={section}
+                                onUpdate={(updates) => updateSection(currentSlide.id, section.id, updates)}
+                              />
+                            </div>
+                            
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No sections added. Add a section to start editing text content with precise positioning.</p>
                     </div>
                   )}
                 </div>
@@ -1496,7 +1512,7 @@ export default function SlideMaker() {
               </CardHeader>
               <CardContent>
                 <div 
-                  className="relative w-full aspect-video border rounded-lg overflow-hidden cursor-pointer"
+                  className="aspect-video bg-gray-100 border rounded-lg relative overflow-hidden"
                   style={{
                     background: currentSlide?.imageUrl 
                       ? `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${currentSlide.imageUrl}')` 
@@ -1504,8 +1520,6 @@ export default function SlideMaker() {
                     backgroundSize: 'cover',
                     backgroundPosition: 'center'
                   }}
-                  onClick={() => setIsPreviewMode(true)}
-                  data-testid="slide-preview"
                 >
                   {/* Overlays */}
                   {currentSlide?.overlayType === 'horizontal' && (
@@ -1523,66 +1537,42 @@ export default function SlideMaker() {
                     <div 
                       className="absolute inset-0"
                       style={{
-                        background: `linear-gradient(90deg, ${hexWithOpacity(currentSlide.overlayColor || '#000000', currentSlide.overlayOpacity || 0.5)} 0%, transparent 33.33%, transparent 66.66%, ${hexWithOpacity(currentSlide.overlayColor || '#000000', currentSlide.overlayOpacity || 0.5)} 100%)`
+                        background: `linear-gradient(90deg, 
+                          ${hexWithOpacity(currentSlide.overlayColor || '#000000', currentSlide.overlayOpacity || 0.5)} 0%, 
+                          transparent 33.33%, 
+                          transparent 66.66%, 
+                          ${hexWithOpacity(currentSlide.overlayColor || '#000000', currentSlide.overlayOpacity || 0.5)} 100%)`
                       }}
                     />
                   )}
                   
-                  {/* Content - Sections or Legacy */}
+                  {/* Content */}
                   {currentSlide?.sections && currentSlide.sections.length > 0 ? (
-                    <div className="absolute inset-0">
-                      {currentSlide.sections.map(section => {
-                        const left = Math.min(section.xStart, section.xEnd);
-                        const width = Math.max(section.xStart, section.xEnd) - left;
-                        const top = Math.min(section.yStart, section.yEnd);
-                        const height = Math.max(section.yStart, section.yEnd) - top;
-                        
-                        return (
-                          <div 
-                            key={section.id}
-                            className="absolute text-xs"
-                            style={{
-                              left: `${left}%`,
-                              width: `${width}%`,
-                              top: `${top}%`,
-                              height: `${height}%`,
-                              color: section.color,
-                              textAlign: section.align,
-                              fontFamily: FONT_STACKS[section.fontFamily],
-                              fontSize: `${section.fontSize * 0.5}rem`,
-                              lineHeight: '1.2',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            {section.heading && (
-                              <div style={{ fontWeight: 'bold', marginBottom: '0.2rem' }}>
-                                {section.heading}
-                              </div>
-                            )}
-                            <div style={{ whiteSpace: 'pre-line' }}>
-                              {section.text.length > 100 ? section.text.substring(0, 100) + '...' : section.text}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    currentSlide.sections.map(section => renderSection(section))
                   ) : (
-                    <div className={`relative z-10 px-4 h-full flex flex-col justify-center text-${currentSlide?.textAlign || 'center'}`}>
-                      <h2 className="font-bold mb-2 text-white drop-shadow-lg text-sm">
+                    <div className={`relative z-10 px-4 max-w-sm ${
+                      currentSlide?.textAlign === 'left' ? 'text-left' : 
+                      currentSlide?.textAlign === 'right' ? 'text-right' : 'text-center'
+                    }`}>
+                      <h2 className="font-bold mb-4 text-white drop-shadow-lg text-xl">
                         {currentSlide?.title}
                       </h2>
-                      <p className="text-xs leading-relaxed text-white drop-shadow whitespace-pre-line">
-                        {currentSlide?.content && currentSlide.content.length > 100 
-                          ? currentSlide.content.substring(0, 100) + '...' 
-                          : currentSlide?.content
-                        }
+                      <p className="text-sm leading-relaxed text-white drop-shadow whitespace-pre-line">
+                        {currentSlide?.content}
                       </p>
                     </div>
                   )}
-                  
-                  <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                    Click to preview
-                  </div>
+                </div>
+                
+                <div className="mt-4 text-center">
+                  <Button
+                    onClick={() => setIsPreviewMode(true)}
+                    className="w-full"
+                    data-testid="fullscreen-preview-button"
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Full Screen Preview
+                  </Button>
                 </div>
               </CardContent>
             </Card>
