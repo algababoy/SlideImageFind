@@ -1099,7 +1099,7 @@ export default function ClassSlides() {
           <div key={band.id} className="absolute">
             {/* Main band element */}
             <div
-              className={`absolute cursor-move ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+              className={`absolute ${!isPreview ? 'cursor-move' : ''} ${isSelected && !isPreview ? 'ring-2 ring-blue-400' : ''}`}
               style={{
                 left: `${left}%`,
                 width: `${width}%`,
@@ -1109,7 +1109,7 @@ export default function ClassSlides() {
                 opacity: band.alpha,
                 zIndex: (band.zIndex || 0) + 10,
               }}
-              onMouseDown={(e) => handleBandMouseDown(e, band.id)}
+              {...(!isPreview && { onMouseDown: (e) => handleBandMouseDown(e, band.id) })}
               data-testid={`overlay-band-${band.id}`}
             />
             
