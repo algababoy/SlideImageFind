@@ -995,6 +995,97 @@ export default function ClassSlides() {
     }
   };
 
+  // Helper function to generate HTML for sorting activities with interactive functionality
+  const generateSortingActivityHTML = (activity: SortingActivity) => {
+    return `
+      <div class="sorting-activity" style="
+        position: relative; z-index: 100; padding: 2rem; 
+        background: rgba(255, 255, 255, 0.95); 
+        border-radius: 12px; margin: 2rem; 
+        max-width: 90%; color: #333;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      ">
+        <h2 style="text-align: center; margin-bottom: 1.5rem; color: #333; font-size: 1.8rem;">
+          ${activity.title}
+        </h2>
+        
+        <div class="sorting-container" style="display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center;">
+          <!-- Categories -->
+          ${activity.categories.map(category => `
+            <div class="category-column" style="
+              flex: 1; min-width: 200px; background: #f8f9fa; 
+              border-radius: 8px; padding: 1rem; border: 2px dashed #dee2e6;
+            " ondrop="dropElement(event, '${category.id}')" ondragover="allowDrop(event)">
+              <h3 style="text-align: center; margin-bottom: 1rem; color: #495057; font-size: 1.2rem;">
+                ${category.name}
+              </h3>
+              <div class="category-items" id="category-${category.id}" style="min-height: 100px;">
+                <!-- Elements will be placed here -->
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        
+        <!-- Unplaced Elements Area -->
+        <div class="unplaced-elements" style="
+          margin-top: 2rem; padding: 1rem; background: #e9ecef; 
+          border-radius: 8px; text-align: center;
+        " ondrop="dropElement(event, 'unplaced')" ondragover="allowDrop(event)">
+          <h3 style="margin-bottom: 1rem; color: #495057;">Items to Sort</h3>
+          <div class="elements-container" id="unplaced-elements" style="
+            display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
+          ">
+            ${activity.elements.map(element => `
+              <div class="sorting-element" draggable="true" 
+                   ondragstart="dragStart(event, '${element.id}')"
+                   data-element-id="${element.id}"
+                   data-correct-category="${element.correctCategoryId}"
+                   style="
+                     background: #007bff; color: white; padding: 0.5rem 1rem; 
+                     border-radius: 6px; cursor: move; font-size: 0.9rem;
+                     border: 2px solid transparent; transition: all 0.2s;
+                   "
+                   onmouseover="this.style.transform='scale(1.05)'"
+                   onmouseout="this.style.transform='scale(1)'">
+                ${element.text}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <!-- Control Buttons -->
+        <div class="sorting-controls" style="
+          text-align: center; margin-top: 1.5rem; display: flex; 
+          gap: 1rem; justify-content: center; flex-wrap: wrap;
+        ">
+          ${activity.showFeedback ? `
+            <button onclick="checkAnswers()" style="
+              background: #28a745; color: white; border: none; 
+              padding: 0.75rem 1.5rem; border-radius: 6px; cursor: pointer;
+              font-size: 1rem; transition: background 0.2s;
+            " onmouseover="this.style.background='#218838'" 
+               onmouseout="this.style.background='#28a745'">
+              Check Answers
+            </button>
+          ` : ''}
+          <button onclick="resetActivity()" style="
+            background: #6c757d; color: white; border: none; 
+            padding: 0.75rem 1.5rem; border-radius: 6px; cursor: pointer;
+            font-size: 1rem; transition: background 0.2s;
+          " onmouseover="this.style.background='#5a6268'" 
+             onmouseout="this.style.background='#6c757d'">
+            Reset
+          </button>
+        </div>
+        
+        <!-- Feedback Area -->
+        <div id="feedback-area" style="
+          margin-top: 1rem; text-align: center; font-weight: bold;
+        "></div>
+      </div>
+    `;
+  };
+
   const exportHTML = () => {
     const citations = generateMLACitations();
     const citationsHtml = citations.length > 0 ? `
@@ -1104,30 +1195,32 @@ export default function ClassSlides() {
                     return `<div style="position: absolute; left: ${left}%; width: ${width}%; top: ${top}%; height: ${height}%; background-color: ${band.color}; opacity: ${band.alpha}; z-index: ${(band.zIndex || 0) + 10};"></div>`;
                   }).join('') : ''}
                 
-                ${useSections ? slide.sections!.map(section => `
-                    <div class="section" style="
-                        left: ${Math.min(section.xStart, section.xEnd)}%;
-                        width: ${Math.max(section.xStart, section.xEnd) - Math.min(section.xStart, section.xEnd)}%;
-                        top: ${Math.min(section.yStart, section.yEnd)}%;
-                        height: ${Math.max(section.yStart, section.yEnd) - Math.min(section.yStart, section.yEnd)}%;
-                        color: ${section.color};
-                        text-align: ${section.align};
-                        font-family: ${FONT_STACKS[section.fontFamily]};
-                        animation-delay: ${section.transitionDelay || 0}s;
-                        z-index: 100;
-                    " class="${section.transition ? `animate-${section.transition === 'fade' ? 'fadeIn' : section.transition === 'slide' ? 'slideInLeft' : section.transition === 'zoom' ? 'zoomIn' : section.transition === 'bounce' ? 'bounceIn' : ''}` : ''}">
-                        ${section.heading ? `<h3 style="margin-bottom: 0.5rem; font-size: ${(section.fontSize + 0.3) * (slide.fontSizeScale || 1.0) * 16}px; font-weight: bold;">${section.heading}</h3>` : ''}
-                        <div style="font-size: ${section.fontSize * (slide.fontSizeScale || 1.0) * 16}px; line-height: 1.45; white-space: pre-line;">${section.text}</div>
-                    </div>
-                `).join('') : `
-                    <div class="slide-content" style="
-                        text-align: ${slide.textAlign || 'center'};
-                        color: ${slide.textColor || '#ffffff'};
-                    ">
-                        <h1 style="font-size: ${(slide.titleSize || 3.5) * (slide.fontSizeScale || 1.0) * 16}px; margin-bottom: 1.5rem;">${slide.title}</h1>
-                        <p style="font-size: ${(slide.bodySize || 1.4) * (slide.fontSizeScale || 1.0) * 16}px; white-space: pre-line;">${slide.content}</p>
-                    </div>
-                `}
+                ${slide.type === 'sorting' && slide.sortingActivity ? 
+                    generateSortingActivityHTML(slide.sortingActivity) :
+                    useSections ? slide.sections!.map(section => `
+                        <div class="section" style="
+                            left: ${Math.min(section.xStart, section.xEnd)}%;
+                            width: ${Math.max(section.xStart, section.xEnd) - Math.min(section.xStart, section.xEnd)}%;
+                            top: ${Math.min(section.yStart, section.yEnd)}%;
+                            height: ${Math.max(section.yStart, section.yEnd) - Math.min(section.yStart, section.yEnd)}%;
+                            color: ${section.color};
+                            text-align: ${section.align};
+                            font-family: ${FONT_STACKS[section.fontFamily]};
+                            animation-delay: ${section.transitionDelay || 0}s;
+                            z-index: 100;
+                        " class="${section.transition ? `animate-${section.transition === 'fade' ? 'fadeIn' : section.transition === 'slide' ? 'slideInLeft' : section.transition === 'zoom' ? 'zoomIn' : section.transition === 'bounce' ? 'bounceIn' : ''}` : ''}">
+                            ${section.heading ? `<h3 style="margin-bottom: 0.5rem; font-size: ${(section.fontSize + 0.3) * (slide.fontSizeScale || 1.0) * 16}px; font-weight: bold;">${section.heading}</h3>` : ''}
+                            <div style="font-size: ${section.fontSize * (slide.fontSizeScale || 1.0) * 16}px; line-height: 1.45; white-space: pre-line;">${section.text}</div>
+                        </div>
+                    `).join('') : `
+                        <div class="slide-content" style="
+                            text-align: ${slide.textAlign || 'center'};
+                            color: ${slide.textColor || '#ffffff'};
+                        ">
+                            <h1 style="font-size: ${(slide.titleSize || 3.5) * (slide.fontSizeScale || 1.0) * 16}px; margin-bottom: 1.5rem;">${slide.title}</h1>
+                            <p style="font-size: ${(slide.bodySize || 1.4) * (slide.fontSizeScale || 1.0) * 16}px; white-space: pre-line;">${slide.content}</p>
+                        </div>
+                    `}
             </div>
           `;
         }).join('')}
@@ -1201,6 +1294,107 @@ export default function ClassSlides() {
                 toggleCitations();
             }
         });
+        
+        // Sorting Activity Functions
+        let draggedElement = null;
+        const activityState = {
+            placements: {}, // elementId -> categoryId
+            feedback: {}    // elementId -> boolean
+        };
+        
+        function allowDrop(event) {
+            event.preventDefault();
+        }
+        
+        function dragStart(event, elementId) {
+            draggedElement = elementId;
+            event.dataTransfer.setData('text/plain', elementId);
+            // Add visual feedback
+            event.target.style.opacity = '0.7';
+        }
+        
+        function dropElement(event, targetCategoryId) {
+            event.preventDefault();
+            if (!draggedElement) return;
+            
+            const element = document.querySelector(\`[data-element-id="\${draggedElement}"]\`);
+            if (!element) return;
+            
+            // Reset opacity
+            element.style.opacity = '1';
+            
+            // Clear any existing feedback styles
+            element.style.border = '2px solid transparent';
+            delete activityState.feedback[draggedElement];
+            
+            // Update state
+            if (targetCategoryId === 'unplaced') {
+                delete activityState.placements[draggedElement];
+                // Move to unplaced area
+                document.getElementById('unplaced-elements').appendChild(element);
+            } else {
+                activityState.placements[draggedElement] = targetCategoryId;
+                // Move to category
+                document.getElementById(\`category-\${targetCategoryId}\`).appendChild(element);
+            }
+            
+            draggedElement = null;
+            clearFeedback();
+        }
+        
+        function checkAnswers() {
+            const elements = document.querySelectorAll('[data-element-id]');
+            let correctCount = 0;
+            let totalCount = 0;
+            
+            elements.forEach(element => {
+                const elementId = element.getAttribute('data-element-id');
+                const correctCategory = element.getAttribute('data-correct-category');
+                const placedCategory = activityState.placements[elementId];
+                
+                totalCount++;
+                
+                if (placedCategory === correctCategory) {
+                    correctCount++;
+                    element.style.border = '2px solid #28a745';
+                    activityState.feedback[elementId] = true;
+                } else {
+                    element.style.border = '2px solid #dc3545';
+                    activityState.feedback[elementId] = false;
+                }
+            });
+            
+            const feedbackArea = document.getElementById('feedback-area');
+            if (correctCount === totalCount) {
+                feedbackArea.innerHTML = \`<span style="color: #28a745;">Perfect! All items are correctly sorted (\${correctCount}/\${totalCount})</span>\`;
+            } else {
+                feedbackArea.innerHTML = \`<span style="color: #dc3545;">Keep trying! \${correctCount} out of \${totalCount} items are correctly placed.</span>\`;
+            }
+        }
+        
+        function resetActivity() {
+            activityState.placements = {};
+            activityState.feedback = {};
+            
+            // Move all elements back to unplaced area
+            const elements = document.querySelectorAll('[data-element-id]');
+            const unplacedContainer = document.getElementById('unplaced-elements');
+            
+            elements.forEach(element => {
+                element.style.border = '2px solid transparent';
+                element.style.opacity = '1';
+                unplacedContainer.appendChild(element);
+            });
+            
+            clearFeedback();
+        }
+        
+        function clearFeedback() {
+            const feedbackArea = document.getElementById('feedback-area');
+            if (feedbackArea) {
+                feedbackArea.innerHTML = '';
+            }
+        }
     </script>
 </body>
 </html>`;
