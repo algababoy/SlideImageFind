@@ -1584,6 +1584,7 @@ export default function ClassSlides() {
                       <option value="title">Title</option>
                       <option value="content">Content</option>
                       <option value="image">Image</option>
+                      <option value="sorting">Sorting Activity</option>
                     </select>
                   </div>
                 </div>
