@@ -622,6 +622,282 @@ export default function ClassSlides() {
     );
   };
 
+  // State for drag and drop functionality - scoped per activity
+  const [draggedElement, setDraggedElement] = useState<SortingElement | null>(null);
+  const [sortingStates, setSortingStates] = useState<Record<string, {
+    currentlyPlacedElements: Record<string, string>;
+    showFeedback: Record<string, boolean>;
+    attemptCount: number;
+    isCompleted: boolean;
+  }>>({});
+
+  // Get current sorting state for the active slide
+  const getCurrentSortingState = () => {
+    const activityId = currentSlide?.sortingActivity?.id;
+    if (!activityId) return null;
+    
+    return sortingStates[activityId] || {
+      currentlyPlacedElements: {},
+      showFeedback: {},
+      attemptCount: 0,
+      isCompleted: false
+    };
+  };
+
+  // Update sorting state for the active slide
+  const updateSortingState = (updates: Partial<{
+    currentlyPlacedElements: Record<string, string>;
+    showFeedback: Record<string, boolean>;
+    attemptCount: number;
+    isCompleted: boolean;
+  }>) => {
+    const activityId = currentSlide?.sortingActivity?.id;
+    if (!activityId) return;
+
+    setSortingStates(prev => {
+      const currentState = prev[activityId] || {
+        currentlyPlacedElements: {},
+        showFeedback: {},
+        attemptCount: 0,
+        isCompleted: false
+      };
+      
+      return {
+        ...prev,
+        [activityId]: {
+          ...currentState,
+          ...updates
+        }
+      };
+    });
+  };
+
+  // Render sorting activity for preview/fullscreen
+  const renderSortingActivity = (activity: SortingActivity, isPreview = false) => {
+    const sortingState = getCurrentSortingState();
+    if (!sortingState) return null;
+    
+    const { currentlyPlacedElements, showFeedback, attemptCount, isCompleted } = sortingState;
+    
+    const elementsByCategory = activity.categories.reduce((acc, category) => {
+      acc[category.id] = activity.elements.filter(el => el.correctCategoryId === category.id);
+      return acc;
+    }, {} as Record<string, SortingElement[]>);
+
+    const unplacedElements = activity.elements.filter(el => !currentlyPlacedElements[el.id]);
+    
+    const handleDragStart = (e: React.DragEvent, element: SortingElement) => {
+      setDraggedElement(element);
+      e.dataTransfer.setData('text/plain', element.id);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = (e: React.DragEvent, categoryId: string) => {
+      e.preventDefault();
+      if (!draggedElement) return;
+
+      const newPlacement = { ...currentlyPlacedElements };
+      newPlacement[draggedElement.id] = categoryId;
+      
+      // Clear any previous feedback when moving elements and update placement in single call
+      const newFeedback = { ...showFeedback };
+      if (showFeedback[draggedElement.id] !== undefined) {
+        delete newFeedback[draggedElement.id];
+      }
+      
+      updateSortingState({ 
+        currentlyPlacedElements: newPlacement,
+        showFeedback: newFeedback
+      });
+
+      setDraggedElement(null);
+    };
+
+    const handleDragToUnplaced = (e: React.DragEvent) => {
+      e.preventDefault();
+      if (!draggedElement) return;
+
+      const newPlacement = { ...currentlyPlacedElements };
+      delete newPlacement[draggedElement.id];
+      
+      const newFeedback = { ...showFeedback };
+      delete newFeedback[draggedElement.id];
+      
+      updateSortingState({ 
+        currentlyPlacedElements: newPlacement,
+        showFeedback: newFeedback 
+      });
+
+      setDraggedElement(null);
+    };
+
+    const handleReset = () => {
+      updateSortingState({
+        currentlyPlacedElements: {},
+        showFeedback: {},
+        isCompleted: false
+      });
+    };
+
+    const handleCheckAnswers = () => {
+      const feedback: Record<string, boolean> = {};
+      activity.elements.forEach(element => {
+        const placedCategory = currentlyPlacedElements[element.id];
+        feedback[element.id] = placedCategory === element.correctCategoryId;
+      });
+      
+      const allCorrect = activity.elements.every(el => 
+        currentlyPlacedElements[el.id] === el.correctCategoryId
+      );
+      
+      updateSortingState({
+        showFeedback: feedback,
+        attemptCount: attemptCount + 1,
+        isCompleted: allCorrect
+      });
+    };
+
+    const allElementsPlaced = activity.elements.every(el => currentlyPlacedElements[el.id]);
+
+    return (
+      <div className="absolute inset-0 p-4 overflow-auto bg-white/90 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto">
+          {/* Activity Header */}
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">{activity.title}</h1>
+            {activity.description && (
+              <p className="text-gray-600 mb-4">{activity.description}</p>
+            )}
+            <div className="flex justify-center gap-4 text-sm text-gray-500">
+              <span>Attempts: {attemptCount}</span>
+              {isCompleted && <span className="text-green-600 font-semibold">✓ Completed!</span>}
+            </div>
+          </div>
+
+          {/* Unplaced Elements */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800">Items to Sort:</h3>
+            <div 
+              className="flex flex-wrap gap-2 p-4 bg-gray-100 rounded-lg min-h-[80px]"
+              onDragOver={handleDragOver}
+              onDrop={handleDragToUnplaced}
+              data-testid="unplaced-elements-area"
+            >
+              {unplacedElements.length > 0 ? (
+                unplacedElements.map((element) => (
+                  <div
+                    key={element.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, element)}
+                    className="px-3 py-2 rounded cursor-move shadow-sm border-2 border-gray-300 hover:border-gray-400 transition-colors"
+                    style={{ 
+                      backgroundColor: element.color || '#6B7280',
+                      color: 'white'
+                    }}
+                    data-testid={`draggable-element-${element.id}`}
+                  >
+                    {element.text}
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-500 text-sm">
+                  {allElementsPlaced ? "All items have been sorted!" : "Drag items back here to unsort them"}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Categories */}
+          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(activity.categories.length, 3)}, 1fr)` }}>
+            {activity.categories.map((category) => {
+              const elementsInCategory = activity.elements.filter(el => 
+                currentlyPlacedElements[el.id] === category.id
+              );
+
+              return (
+                <div
+                  key={category.id}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, category.id)}
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-4 min-h-[120px] hover:border-gray-400 transition-colors"
+                  style={{ borderColor: category.color }}
+                  data-testid={`drop-zone-${category.id}`}
+                >
+                  <h4 
+                    className="font-semibold mb-3 text-center"
+                    style={{ color: category.color }}
+                  >
+                    {category.name}
+                  </h4>
+                  {category.description && (
+                    <p className="text-xs text-gray-600 mb-2 text-center">{category.description}</p>
+                  )}
+                  
+                  <div className="space-y-2">
+                    {elementsInCategory.map((element) => {
+                      const feedback = showFeedback[element.id];
+                      const isCorrect = element.correctCategoryId === category.id;
+                      
+                      return (
+                        <div
+                          key={element.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, element)}
+                          className={`px-3 py-2 rounded shadow-sm cursor-move ${
+                            feedback !== undefined 
+                              ? (isCorrect ? 'border-2 border-green-500 bg-green-50' : 'border-2 border-red-500 bg-red-50')
+                              : 'border border-gray-300 hover:border-gray-400'
+                          }`}
+                          style={{ 
+                            backgroundColor: feedback === undefined ? (element.color || '#6B7280') : undefined,
+                            color: feedback === undefined ? 'white' : (isCorrect ? '#065f46' : '#991b1b')
+                          }}
+                          data-testid={`placed-element-${element.id}`}
+                        >
+                          {element.text}
+                          {feedback !== undefined && (
+                            <span className="ml-2">
+                              {isCorrect ? '✓' : '✗'}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-center gap-4 mt-6">
+            {allElementsPlaced && !isCompleted && (
+              <Button 
+                onClick={handleCheckAnswers}
+                className="bg-blue-600 hover:bg-blue-700"
+                data-testid="check-answers-button"
+              >
+                Check Answers
+              </Button>
+            )}
+            {(activity.allowMultipleAttempts || attemptCount === 0) && (
+              <Button 
+                onClick={handleReset}
+                variant="outline"
+                data-testid="reset-activity-button"
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Generate MLA citations for all images used
   const generateMLACitations = () => {
     const citations: string[] = [];
@@ -1484,7 +1760,9 @@ export default function ClassSlides() {
           )}
           
           {/* Content */}
-          {useSections ? (
+          {slide?.type === 'sorting' && slide?.sortingActivity ? (
+            renderSortingActivity(slide.sortingActivity, false)
+          ) : useSections ? (
             slide.sections!.map((section, index) => renderSection(section, true, index === currentSectionIndex))
           ) : (
             <div className={`relative z-10 px-8 max-w-4xl ${
@@ -2458,7 +2736,9 @@ export default function ClassSlides() {
                   )}
                   
                   {/* Content */}
-                  {currentSlide?.sections && currentSlide.sections.length > 0 ? (
+                  {currentSlide?.type === 'sorting' && currentSlide?.sortingActivity ? (
+                    renderSortingActivity(currentSlide.sortingActivity, true)
+                  ) : currentSlide?.sections && currentSlide.sections.length > 0 ? (
                     currentSlide.sections.map(section => renderSection(section))
                   ) : (
                     <div className={`relative z-10 px-4 max-w-sm ${
