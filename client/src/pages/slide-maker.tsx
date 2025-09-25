@@ -41,7 +41,7 @@ import {
  * - Integrated with multi-source Creative Commons image search
  */
 
-type SlideType = "title" | "content" | "image";
+type SlideType = "title" | "content" | "image" | "sorting";
 type TextAlign = "left" | "center" | "right";
 type OverlayType = "none" | "horizontal" | "sides";
 type FontFamily = "system" | "serif" | "mono" | "display" | "hand";
@@ -74,6 +74,30 @@ interface OverlayBand {
   zIndex?: number; // layering order (higher = on top)
 }
 
+interface SortingElement {
+  id: string;
+  text: string;
+  correctCategoryId: string;
+  color?: string; // hex color for the element
+}
+
+interface SortingCategory {
+  id: string;
+  name: string;
+  color?: string; // hex color for the category
+  description?: string;
+}
+
+interface SortingActivity {
+  id: string;
+  title: string;
+  description?: string;
+  categories: SortingCategory[];
+  elements: SortingElement[];
+  showFeedback: boolean; // whether to show correct/incorrect feedback
+  allowMultipleAttempts: boolean;
+}
+
 interface Slide {
   id: string;
   title: string;
@@ -93,6 +117,7 @@ interface Slide {
   fontSizeScale?: number; // multiplier for all text (default 1.0)
   sections?: SlideSection[]; // NEW
   overlayBands?: OverlayBand[]; // Configurable overlay bands
+  sortingActivity?: SortingActivity; // NEW: Sorting activity for educational slides
 }
 
 const FONT_STACKS: Record<FontFamily, string> = {
