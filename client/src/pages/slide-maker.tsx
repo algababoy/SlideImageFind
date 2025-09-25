@@ -478,6 +478,150 @@ export default function ClassSlides() {
     );
   };
 
+  // Sorting Activity Management Functions
+  const initializeSortingActivity = (slideId: string) => {
+    const newActivity: SortingActivity = {
+      id: `sort-${Date.now()}`,
+      title: "Sorting Activity",
+      description: "Drag items to the correct categories",
+      categories: [],
+      elements: [],
+      showFeedback: true,
+      allowMultipleAttempts: true
+    };
+    
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId ? { ...s, sortingActivity: newActivity } : s
+      )
+    );
+  };
+
+  const updateSortingActivity = (slideId: string, updates: Partial<SortingActivity>) => {
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId && s.sortingActivity
+          ? { ...s, sortingActivity: { ...s.sortingActivity, ...updates } }
+          : s
+      )
+    );
+  };
+
+  const addCategory = (slideId: string) => {
+    const newCategory: SortingCategory = {
+      id: `cat-${Date.now()}`,
+      name: "New Category",
+      color: "#3B82F6",
+      description: ""
+    };
+
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId && s.sortingActivity
+          ? {
+              ...s,
+              sortingActivity: {
+                ...s.sortingActivity,
+                categories: [...s.sortingActivity.categories, newCategory]
+              }
+            }
+          : s
+      )
+    );
+  };
+
+  const updateCategory = (slideId: string, categoryId: string, updates: Partial<SortingCategory>) => {
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId && s.sortingActivity
+          ? {
+              ...s,
+              sortingActivity: {
+                ...s.sortingActivity,
+                categories: s.sortingActivity.categories.map((cat) =>
+                  cat.id === categoryId ? { ...cat, ...updates } : cat
+                )
+              }
+            }
+          : s
+      )
+    );
+  };
+
+  const deleteCategory = (slideId: string, categoryId: string) => {
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId && s.sortingActivity
+          ? {
+              ...s,
+              sortingActivity: {
+                ...s.sortingActivity,
+                categories: s.sortingActivity.categories.filter((cat) => cat.id !== categoryId),
+                elements: s.sortingActivity.elements.filter((el) => el.correctCategoryId !== categoryId)
+              }
+            }
+          : s
+      )
+    );
+  };
+
+  const addElement = (slideId: string, categoryId: string) => {
+    const newElement: SortingElement = {
+      id: `elem-${Date.now()}`,
+      text: "New Element",
+      correctCategoryId: categoryId,
+      color: "#6B7280"
+    };
+
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId && s.sortingActivity
+          ? {
+              ...s,
+              sortingActivity: {
+                ...s.sortingActivity,
+                elements: [...s.sortingActivity.elements, newElement]
+              }
+            }
+          : s
+      )
+    );
+  };
+
+  const updateElement = (slideId: string, elementId: string, updates: Partial<SortingElement>) => {
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId && s.sortingActivity
+          ? {
+              ...s,
+              sortingActivity: {
+                ...s.sortingActivity,
+                elements: s.sortingActivity.elements.map((el) =>
+                  el.id === elementId ? { ...el, ...updates } : el
+                )
+              }
+            }
+          : s
+      )
+    );
+  };
+
+  const deleteElement = (slideId: string, elementId: string) => {
+    setSlides((prev) =>
+      prev.map((s) =>
+        s.id === slideId && s.sortingActivity
+          ? {
+              ...s,
+              sortingActivity: {
+                ...s.sortingActivity,
+                elements: s.sortingActivity.elements.filter((el) => el.id !== elementId)
+              }
+            }
+          : s
+      )
+    );
+  };
+
   // Generate MLA citations for all images used
   const generateMLACitations = () => {
     const citations: string[] = [];
@@ -2057,6 +2201,207 @@ export default function ClassSlides() {
                     </div>
                   )}
                 </div>
+
+                {/* Sorting Activity Management - Only shown for sorting slide types */}
+                {currentSlide?.type === 'sorting' && (
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Sorting Activity</h3>
+                      {!currentSlide.sortingActivity && (
+                        <Button 
+                          onClick={() => initializeSortingActivity(currentSlide.id)} 
+                          size="sm" 
+                          data-testid="initialize-sorting-button"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Sorting Activity
+                        </Button>
+                      )}
+                    </div>
+
+                    {currentSlide.sortingActivity ? (
+                      <div className="space-y-6">
+                        {/* Activity Settings */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-sm">Activity Settings</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <Label>Activity Title</Label>
+                                <Input
+                                  value={currentSlide.sortingActivity.title}
+                                  onChange={(e) => updateSortingActivity(currentSlide.id, { title: e.target.value })}
+                                  placeholder="Sorting Activity Title"
+                                  data-testid="sorting-activity-title"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="checkbox"
+                                    id="show-feedback"
+                                    checked={currentSlide.sortingActivity.showFeedback}
+                                    onChange={(e) => updateSortingActivity(currentSlide.id, { showFeedback: e.target.checked })}
+                                    data-testid="show-feedback-checkbox"
+                                  />
+                                  <Label htmlFor="show-feedback">Show feedback</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="checkbox"
+                                    id="multiple-attempts"
+                                    checked={currentSlide.sortingActivity.allowMultipleAttempts}
+                                    onChange={(e) => updateSortingActivity(currentSlide.id, { allowMultipleAttempts: e.target.checked })}
+                                    data-testid="multiple-attempts-checkbox"
+                                  />
+                                  <Label htmlFor="multiple-attempts">Allow multiple attempts</Label>
+                                </div>
+                              </div>
+                            </div>
+                            <div>
+                              <Label>Description (optional)</Label>
+                              <Textarea
+                                value={currentSlide.sortingActivity.description || ''}
+                                onChange={(e) => updateSortingActivity(currentSlide.id, { description: e.target.value })}
+                                placeholder="Instructions for students"
+                                rows={2}
+                                data-testid="sorting-activity-description"
+                              />
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Categories */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-sm flex items-center justify-between">
+                              Categories
+                              <Button 
+                                onClick={() => addCategory(currentSlide.id)} 
+                                size="sm" 
+                                data-testid="add-category-button"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Category
+                              </Button>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {currentSlide.sortingActivity.categories.length > 0 ? (
+                              <div className="space-y-3">
+                                {currentSlide.sortingActivity.categories.map((category, index) => (
+                                  <div key={category.id} className="border rounded p-3 bg-gray-50">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm font-medium">Category {index + 1}</span>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => deleteCategory(currentSlide.id, category.id)}
+                                        data-testid={`delete-category-${index}`}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                      <div>
+                                        <Label>Name</Label>
+                                        <Input
+                                          value={category.name}
+                                          onChange={(e) => updateCategory(currentSlide.id, category.id, { name: e.target.value })}
+                                          placeholder="Category name"
+                                          data-testid={`category-name-${index}`}
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label>Color</Label>
+                                        <Input
+                                          type="color"
+                                          value={category.color || '#3B82F6'}
+                                          onChange={(e) => updateCategory(currentSlide.id, category.id, { color: e.target.value })}
+                                          data-testid={`category-color-${index}`}
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label>Description</Label>
+                                        <Input
+                                          value={category.description || ''}
+                                          onChange={(e) => updateCategory(currentSlide.id, category.id, { description: e.target.value })}
+                                          placeholder="Optional description"
+                                          data-testid={`category-description-${index}`}
+                                        />
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Elements for this category */}
+                                    <div className="mt-3">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <Label className="text-xs">Elements in this category:</Label>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => addElement(currentSlide.id, category.id)}
+                                          data-testid={`add-element-${index}`}
+                                        >
+                                          <Plus className="h-3 w-3 mr-1" />
+                                          Add Element
+                                        </Button>
+                                      </div>
+                                      <div className="space-y-2">
+                                        {currentSlide.sortingActivity?.elements
+                                          .filter(el => el.correctCategoryId === category.id)
+                                          .map((element, elemIndex) => (
+                                            <div key={element.id} className="flex items-center gap-2 bg-white p-2 rounded border">
+                                              <Input
+                                                value={element.text}
+                                                onChange={(e) => updateElement(currentSlide.id, element.id, { text: e.target.value })}
+                                                placeholder="Element text"
+                                                className="flex-1"
+                                                data-testid={`element-text-${index}-${elemIndex}`}
+                                              />
+                                              <Input
+                                                type="color"
+                                                value={element.color || '#6B7280'}
+                                                onChange={(e) => updateElement(currentSlide.id, element.id, { color: e.target.value })}
+                                                className="w-12"
+                                                data-testid={`element-color-${index}-${elemIndex}`}
+                                              />
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => deleteElement(currentSlide.id, element.id)}
+                                                data-testid={`delete-element-${index}-${elemIndex}`}
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                          ))}
+                                        {(currentSlide.sortingActivity?.elements.filter(el => el.correctCategoryId === category.id).length ?? 0) === 0 && (
+                                          <div className="text-center py-2 text-gray-500 text-xs">
+                                            No elements in this category yet
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-6 text-gray-500">
+                                <p>No categories created. Add a category to start building your sorting activity.</p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <p>Create a sorting activity to design educational sorting exercises for students.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
               </CardContent>
             </Card>
