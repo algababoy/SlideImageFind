@@ -672,7 +672,18 @@ export default function ClassSlides() {
     });
   };
 
+  // Fisher-Yates shuffle algorithm
+  const shuffleArray = (array: any[]) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   // Render sorting activity for preview/fullscreen
+
   const renderSortingActivity = (activity: SortingActivity, isPreview = false) => {
     const sortingState = getCurrentSortingState();
     if (!sortingState) return null;
@@ -684,7 +695,8 @@ export default function ClassSlides() {
       return acc;
     }, {} as Record<string, SortingElement[]>);
 
-    const unplacedElements = activity.elements.filter(el => !currentlyPlacedElements[el.id]);
+    // Shuffle unplaced elements so they don't appear in the order they were created
+    const unplacedElements = shuffleArray(activity.elements.filter(el => !currentlyPlacedElements[el.id]));
     
     const handleDragStart = (e: React.DragEvent, element: SortingElement) => {
       setDraggedElement(element);
@@ -1035,7 +1047,7 @@ export default function ClassSlides() {
           <div class="elements-container" id="unplaced-elements" style="
             display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
           ">
-            ${activity.elements.map(element => `
+            ${shuffleArray(activity.elements).map(element => `
               <div class="sorting-element" draggable="true" 
                    ondragstart="dragStart(event, '${element.id}')"
                    data-element-id="${element.id}"
